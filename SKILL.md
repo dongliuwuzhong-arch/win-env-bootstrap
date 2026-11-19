@@ -1,6 +1,6 @@
 ---
 name: dsh-env-bootstrap
-description: 换机第二阶段：在一台 Windows 上把 DSH 日常要用的公开工具装齐并自检（前提是本体已装、工作区已拷）。说「装环境」「换电脑」「新机器」「环境没配」「bootstrap」「一键配环境」时触发。十七类检查。能自动装的只有一部分，其余只报告；PATH 缺项自动补，重复项只报告。不装 DSH 本体、不建 ~/.dsh 目录树；G2 能修，前提是源文件已拷过来。
+description: 换机第二阶段：在一台 Windows 上把 DSH 日常要用的公开工具装齐并自检（前提是本体已装、工作区已拷）。说「装环境」「换电脑」「新机器」「环境没配」「bootstrap」「一键配环境」时触发。十八类检查。能自动装的只有一部分，其余只报告；PATH 缺项自动补，重复项只报告。不装 DSH 本体、不建 ~/.dsh 目录树；G2 能修，前提是源文件已拷过来。
 ---
 
 # dsh-env-bootstrap · 新机环境一次装齐
@@ -14,7 +14,7 @@ description: 换机第二阶段：在一台 Windows 上把 DSH 日常要用的�
 | 阶段 | 谁做 | 内容 |
 |---|---|---|
 | **一（前提）** | 人 + 官方安装器 | 装 DSH 本体；拷工作区目录和 `~/.dsh\`（含 `profiles\desktop\node_modules`）；填 `.credentials.yaml` |
-| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 17 类自检出中文报告 |
+| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 18 类自检出中文报告 |
 
 阶段一没做完，阶段二只能报一堆红——它不代替阶段一。
 
@@ -42,7 +42,7 @@ node <技能目录>/scripts/verify.mjs
 
 退出码：`0` 全过 / `1` 有硬缺口 / `2` 能跑但有提醒。
 
-## 十七类检查
+## 十八类检查
 
 `config/manifest.json` 的 `categories` 是唯一清单，下面 17 行按它逐行排。
 「缺了怎么办」列写的是**脚本实际干的事**，不是打算干的事。
@@ -229,7 +229,7 @@ PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「
 
 | 参数 | 干什么 |
 |---|---|
-| （无） | 17 类全跑，约 14-15 秒 |
+| （无） | 18 类全跑，约 14-15 秒 |
 | `--only=A,G2` | 只跑指定段 |
 | `--no-selfcheck` | 跳过 M 段（dsh-selfcheck 占 ~9 秒），全跑降到 5.6 秒 |
 
@@ -272,3 +272,45 @@ powershell -File scripts/smoke.ps1    # 一键冒烟
 优先级：`-Workspace` 参数 > `DSH_WORKSPACE` 环境变量 > `config/manifest.json` 的 `workspace.default`。
 
 没设的话 H 段会报「工作区不存在」——这是提示，不是 bug。
+
+## MCP：让 agent 自己发现工具
+
+`scripts/mcp/server.mjs` 是个 stdio MCP server，**只读**，不安装、不改 PATH。
+
+| 工具 | 作用 |
+|---|---|
+| `env_status` | 全量体检结果（等价 `verify.mjs --json`），18 段逐条状态 |
+| `tool_discover` | 按 capability 查工具，如 `media:probe` → ffprobe，含消费方与缺失后果 |
+| `tool_resolve` | 工具名 → 绝对路径 + 版本 + 是否在 PATH + 安装提示 |
+
+注册（profile 的 `cordis.patch.yml`）：
+
+```yaml
+- id: mcp
+  config:
+    servers:
+      dsh-env-bootstrap:
+        transport: stdio
+        command: node
+        args: ['C:/DSH空间/.agents/skills/dsh-env-bootstrap/scripts/mcp/server.mjs']
+```
+
+或直接命令行验证：
+
+```bash
+printf '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n' | node scripts/mcp/server.mjs
+```
+
+## 十八类（含 00 人工前置）
+
+`00` 段是新加的：**阶段一四件事脚本从不做，但缺了新电脑就跑不起来**。
+它会明确告诉你还差哪几步、每步怎么做，而不是让你从十几条警告里自己推断。
+
+## 环境变量
+
+| 变量 | 作用 |
+|---|---|
+| `DSH_WORKSPACE` | 工作区路径（bootstrap 与 verify 都认） |
+| `DSH_HOME` | `~/.dsh` 的替代路径（换用户名 / 裸机模拟用） |
+
+都没设时回落到 `manifest.workspace.default` 和 `os.homedir()/.dsh`。

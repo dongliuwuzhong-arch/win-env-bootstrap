@@ -12,6 +12,7 @@ import os from 'node:os';
 import { createContext } from './lib/paths.js';
 import { bad, stamp, line, counts, summary } from './lib/report.js';
 
+import * as P0 from './checks/00-prerequisites.js';
 import * as A from './checks/a-core-runtime.js';
 import * as B from './checks/b-archive.js';
 import * as C from './checks/c-media.js';
@@ -30,7 +31,7 @@ import * as N from './checks/n-skill-optional-deps.js';
 import * as O from './checks/o-system-env.js';
 import * as P from './checks/p-integrity-migration.js';
 
-const CHECKS = [A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];
+const CHECKS = [P0, A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];
 
 function parseArgs(argv) {
   const only = [];
@@ -44,11 +45,15 @@ function parseArgs(argv) {
   }
   // --no-selfcheck：M 段要 7 秒，调试期跳过
   const noSelfcheck = argv.slice(2).includes('--no-selfcheck');
-  return { only, noSelfcheck };
+  // --json：机器可读输出，MCP server 与自动化都靠它
+  const json = argv.slice(2).includes('--json');
+  return { only, noSelfcheck, json };
 }
 
 const ctx = createContext();
-const { only, noSelfcheck } = parseArgs(process.argv);
+const { only, noSelfcheck, json } = parseArgs(process.argv);
+// --json 时把所有人类可读输出静音，只在最后吐一份 JSON
+const say = json ? () => {} : console.log;
 
 const byId = new Map(CHECKS.map((m) => [m.id, m]));
 const unknown = only.filter((id) => !byId.has(id));
@@ -65,10 +70,10 @@ for (const m of CHECKS) if (!manifestOrder.includes(m.id)) ordered.push(m);
 let todo = only.length ? ordered.filter((m) => only.includes(m.id)) : ordered;
 if (noSelfcheck) todo = todo.filter((m) => m.id !== 'M');
 
-console.log('');
-console.log('=== dsh-env-bootstrap · verify ===');
-console.log('时间: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }));
-console.log('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
+say('');
+say('=== dsh-env-bootstrap · verify ===');
+say('时间: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }));
+say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
 
 // 并行跑（ctx 的探测在 createContext 里已 memo，PowerShell 快照也只取一次），
 // 但严格按 manifest 顺序输出——否则报告读起来会跳。
@@ -85,14 +90,31 @@ for (let i = 0; i < todo.length; i++) {
     // 一段炸了不该吞掉整份报告，但也不能当没事发生
     res = [bad('检查段崩了: ' + String((st.reason && st.reason.message) || st.reason).slice(0, 120))];
   }
-  console.log('');
-  console.log('--- ' + mod.id + '. ' + mod.title + ' ---');
-  for (const r of res) console.log(line(r));
+  say('');
+  say('--- ' + mod.id + '. ' + mod.title + ' ---');
+  for (const r of res) say(line(r));
   results.push(...stamp(mod.id, res));
 }
 
 const c = counts(results);
 const s = summary(c);
+
+if (json) {
+  process.stdout.write(JSON.stringify({
+    tool: 'dsh-env-bootstrap/verify',
+    version: 1,
+    host: os.hostname(),
+    platform: os.platform() + ' ' + os.arch(),
+    ts: new Date().toISOString(),
+    workspace: ctx.WS || null,
+    dshRoot: ctx.DSH_ROOT || null,
+    counts: c,
+    exitCode: s.code,
+    results: results.map((r) => ({ segment: r.id, level: r.level, message: r.message, fix: r.fix || undefined })),
+  }, null, 2));
+  process.exit(s.code);
+}
+
 console.log('');
 console.log('=== 汇总 ===');
 console.log(s.text);

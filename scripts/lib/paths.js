@@ -56,7 +56,8 @@ export function createContext() {
     || process.env.DSH_WORKSPACE
     || FALLBACK.workspace.default
     || '';
-  const DSH_HOME = path.join(HOME, '.dsh');
+  // DSH_HOME 可被环境变量覆盖：裸机模拟测试和换用户名都需要它，不能写死 homedir
+  const DSH_HOME = process.env.DSH_HOME || path.join(HOME, '.dsh');
 
   const ctx = {
     HOME, WS, DSH_HOME, manifest,

@@ -561,7 +561,8 @@ if (Test-Path $appDir) {
     }
 } else { Say "unpacked tree missing" 'warn' }
 
-$dshHome = Join-Path $env:USERPROFILE '.dsh'
+# DSH_HOME can be overridden: bare-metal simulation and a different user name both need it
+$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
 if (Test-Path $dshHome) { Say ".dsh: $dshHome" 'ok' } else { Say ".dsh missing" 'bad' }
 
 $profPkg = Join-Path $dshHome 'profiles\desktop\package.json'
@@ -603,7 +604,7 @@ New-CredentialsTemplate $dshHome
 
 # DSH host itself and an over-new soul db are guidance only - this script does
 # not install the host and must not "fix" a schema gate by downgrading data.
-if (-not $DshRoot) { Say "DSH host missing: install it with the official installer, then rerun (this script never installs the host)" 'warn' }
+if (-not $DshRoot) { Say "DSH host missing: install it with the official installer, then rerun (this script never installs the host)" 'bad' }
 
 # ============ H. workspace ============
 Say 'H. workspace' 'head'
@@ -625,13 +626,13 @@ if (Test-Path $wsPath) {
         $files = @('SOUL.md','IDENTITY.md','USER.md','MEMORY.md')
         $found = 0
         foreach ($f in $files) { if (Test-Path (Join-Path $personaDir $f)) { $found++ } }
-        if ($found -eq 4) { Say "persona 4/4" 'ok' } else { Say "persona $found/4" 'warn' }
-    }
+        if ($found -eq 4) { Say "persona 4/4" 'ok' } else { Say "persona $found/4 (agent loads without persona without it)" 'bad' }
+    } else { Say "knowledge\persona missing (persona never reaches context)" 'bad' }
     $skillsDir = Join-Path $wsPath '.agents\skills'
     if (Test-Path $skillsDir) {
         $cnt = (Get-ChildItem $skillsDir -Directory).Count
         Say "skills: $cnt dirs" 'ok'
-    } else { Say "skills dir missing" 'warn' }
+    } else { Say "skills dir missing: .agents\skills (agent has no skills without it)" 'bad' }
 } else {
     Say "workspace missing: $wsPath (copy from old machine)" 'bad'
 }

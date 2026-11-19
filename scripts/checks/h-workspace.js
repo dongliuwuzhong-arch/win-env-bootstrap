@@ -24,14 +24,14 @@ export async function check(ctx) {
   if (ctx.exists(personaDir)) {
     const got = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md'].filter((f) => ctx.exists(join(personaDir, f)));
     if (got.length === 4) out.push(ok('人格四件套 4/4'));
-    else out.push(warn('人格 ' + got.length + '/4'));
-  } else out.push(warn('knowledge/persona 缺失'));
+    else out.push(bad('人格 ' + got.length + '/4 —— 缺的那几份不会进上下文，agent 就不是那个 agent'));
+  } else out.push(bad('knowledge/persona 缺失 —— 人格从不注入'));
 
   const skillsDir = join(WS, '.agents', 'skills');
   if (ctx.exists(skillsDir)) {
     const dirs = fs.readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
     out.push(ok('技能: ' + dirs.length + ' 个目录'));
-  } else out.push(warn('技能库缺失'));
+  } else out.push(bad('技能库缺失（.agents/skills）—— agent 没有技能可触发'));
 
   // pyb/pys 包装器里写死了用户名路径，换机器/换用户名整条 Python 工具链静默断
   for (const wrap of ['pyb.cmd', 'pys.cmd']) {

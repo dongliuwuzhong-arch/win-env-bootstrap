@@ -74,16 +74,16 @@ test('--only 的大小写不敏感', () => {
   assert.deepEqual(segments(r.stdout), ['A']);
 });
 
-test('不给 --only 时按 manifest 的 17 段顺序全跑（太慢，只查装载器源码）', () => {
+test('不给 --only 时按 manifest 的 18 段顺序全跑（太慢，只查装载器源码）', () => {
   const src = readSource(VERIFY);
-  assert.ok(src.includes('const CHECKS = [A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];'), '装载器的段表被改了');
+  assert.ok(src.includes('const CHECKS = [P0, A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];'), '装载器的段表被改了');
   assert.ok(src.includes('ctx.manifest.categories'), '顺序不再由 manifest 决定');
 });
 
 test('装载器引用的 checks 文件都真实存在', () => {
   const src = readSource(VERIFY);
   const imports = [...src.matchAll(/from '\.\/checks\/([a-z0-9-]+\.js)'/g)].map((m) => m[1]);
-  assert.equal(imports.length, 17);
+  assert.equal(imports.length, 18);
   for (const f of imports) {
     assert.ok(fsx.existsSync(path.join(SCRIPTS, 'checks', f)), '缺检查段文件: ' + f);
   }

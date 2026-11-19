@@ -22,6 +22,11 @@
   },
   "categories": [
     {
+      "id": "00",
+      "name": "人工前置（阶段一）",
+      "desc": "装本体 / 拷 ~/.dsh / 拷工作区 / 填凭据 —— 这四件脚本不做"
+    },
+    {
       "id": "A",
       "name": "核心运行时",
       "desc": "Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm"
@@ -420,5 +425,42 @@
     "sed": "(无内置，用 node -e 或装 GnuWin32.Sed)",
     "make": "(装 GnuWin32.Make)",
     "unzip": "Expand-Archive 或 7z x"
-  }
+  },
+  "prerequisites": [
+    {
+      "id": "dsh-host",
+      "title": "装 DSH 本体",
+      "how": "用官方安装器装 DeepSeek Harness，装完确认注册表 Uninstall 里有 InstallLocation",
+      "blocking": true,
+      "why": "没有本体，下面全部无从谈起"
+    },
+    {
+      "id": "dsh-home",
+      "title": "拷 ~/.dsh（含 profiles/desktop/node_modules）",
+      "how": "整目录从旧机拷过来；node_modules 必须一起带，pnpm install 造不出手工放的那 5 个包",
+      "blocking": true,
+      "why": "插件、凭据、预设、工作区投影全在里面"
+    },
+    {
+      "id": "workspace",
+      "title": "拷工作区",
+      "how": "整目录拷过来，至少要有 .agents/skills、knowledge/persona、tools、_tools",
+      "blocking": true,
+      "why": "技能库和人格没了，agent 就不是那个 agent"
+    },
+    {
+      "id": "credentials",
+      "title": "填 .credentials.yaml",
+      "how": "把 API key 填进 ~/.dsh/.credentials.yaml；脚本只生成注释模板，不写值",
+      "blocking": true,
+      "why": "没有 key，模型通道起不来"
+    },
+    {
+      "id": "env",
+      "title": "设 DSH_WORKSPACE（可选）",
+      "how": "\"[Environment]::SetEnvironmentVariable('DSH_WORKSPACE','D:\\你的工作区','User')\"",
+      "blocking": false,
+      "why": "工作区不在默认路径时才需要"
+    }
+  ]
 }

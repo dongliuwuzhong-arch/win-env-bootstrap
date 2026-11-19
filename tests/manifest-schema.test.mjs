@@ -16,6 +16,7 @@ import { readSource, MANIFEST, SCRIPTS } from './_helpers.mjs';
 import { loadManifest } from '../scripts/lib/paths.js';
 import { exitCode } from '../scripts/lib/report.js';
 
+import * as P0 from '../scripts/checks/00-prerequisites.js';
 import * as A from '../scripts/checks/a-core-runtime.js';
 import * as B from '../scripts/checks/b-archive.js';
 import * as C from '../scripts/checks/c-media.js';
@@ -34,8 +35,9 @@ import * as N from '../scripts/checks/n-skill-optional-deps.js';
 import * as O from '../scripts/checks/o-system-env.js';
 import * as P from '../scripts/checks/p-integrity-migration.js';
 
-const CHECKS = [A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];
-const EXPECTED_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'G2', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
+const CHECKS = [P0, A, B, C, D, E, F, G, G2, H, I, J, K, L, M, N, O, P];
+// '00' 是人工前置段（阶段一），跑在最前；其余是阶段二的 17 段
+const EXPECTED_IDS = ['00', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'G2', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
 
 const raw = fs.readFileSync(MANIFEST, 'utf8');
 const manifest = JSON.parse(raw);
@@ -52,8 +54,8 @@ test('loadManifest() 读到的就是文件本身（兜底 FALLBACK 没被触发�
   assert.deepEqual(loadManifest(), manifest, 'loadManifest 落到兜底了 —— manifest 读不进来');
 });
 
-test('类别正好 17 个，编号与顺序固定', () => {
-  assert.equal(manifest.categories.length, 17);
+test('类别正好 18 个（含 00 人工前置），编号与顺序固定', () => {
+  assert.equal(manifest.categories.length, 18);
   assert.deepEqual(manifest.categories.map((c) => c.id), EXPECTED_IDS);
 });
 
