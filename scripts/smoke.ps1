@@ -1,5 +1,5 @@
 <#
-  dsh-env-bootstrap / smoke.ps1
+  win-env-bootstrap / smoke.ps1
   One-command local smoke test: syntax -> contract tests -> fast verify segment -> exit codes.
 
   ASCII-only on purpose: PowerShell 5.1 reads non-BOM UTF-8 as ANSI and mangles CJK.

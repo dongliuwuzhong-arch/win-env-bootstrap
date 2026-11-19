@@ -1,4 +1,4 @@
-# 维护交接 · dsh-env-bootstrap
+# 维护交接 · win-env-bootstrap
 
 > 给下一个接手这个技能的会话看。**改任何东西之前先读这一份。**
 > 不是介绍功能（那在 `SKILL.md`），是「这个技能怎么被维护」——哪些地方一碰就坏、怎么验证你没改坏、哪些坑已经踩过。
@@ -9,12 +9,12 @@
 
 | 项 | 值 |
 |---|---|
-| 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
+| 仓库 | `dongliuwuzhong-arch/win-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
 | 规模 | 68 个文件 / 5730 行代码 / 133 条 node 测试 + 30 条 Pester（2026-11-20 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
 | 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 133/133、Pester 30/30 |
-| 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
+| 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/win-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
 ⚠️ **别把它当成「新电脑一键配齐」**。文档已经诚实改口，但它离那个目标还差三件事（见文末「没做的」）。
@@ -48,7 +48,7 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 ### 3. 改动必须走「改 → 三验 → 推」
 
 ```bash
-cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
+cd C:/DSH空间/.agents/skills/win-env-bootstrap
 
 # 三验
 node --test "tests/**/*.test.mjs"                    # 133 条，必须全过
@@ -63,7 +63,7 @@ powershell -File scripts/smoke.ps1                   # PASS
 # 推：本机 github.com 直连不通，仓库本地 config 已配 http.proxy=127.0.0.1:7897
 git add -A && git commit -m "..." && git push
 # 推完看一眼 CI（绿了才算落地）：
-# https://github.com/dongliuwuzhong-arch/dsh-env-bootstrap/actions
+# https://github.com/dongliuwuzhong-arch/win-env-bootstrap/actions
 ```
 
 ## 模块：core / dsh（2026-11-19 分层）
@@ -114,7 +114,7 @@ README.md / README.en.md 中文 / 英文说明，逐节镜像，改一份必须�
 ## 常用命令
 
 ```bash
-S=C:/DSH空间/.agents/skills/dsh-env-bootstrap
+S=C:/DSH空间/.agents/skills/win-env-bootstrap
 
 # 体检（人类可读）
 node $S/scripts/verify.mjs
@@ -244,7 +244,7 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 ## 怎么确认你没改坏
 
 ```bash
-cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
+cd C:/DSH空间/.agents/skills/win-env-bootstrap
 
 # 1. 三验
 node --test "tests/**/*.test.mjs" && node scripts/verify.mjs && powershell -File scripts/smoke.ps1

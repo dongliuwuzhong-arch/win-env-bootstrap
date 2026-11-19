@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-env-bootstrap / verify.mjs —— 装载器
+ * win-env-bootstrap / verify.mjs —— 装载器
  * 详细自检：Node 装好之后跑这个。中文报告，覆盖 DSH 日常全部前置条件。
  *
  * 结构：checks/*.js 每段一个，导出 check(ctx) -> Result[]；这里只按 manifest 的
@@ -78,7 +78,7 @@ if (onlyRaw.length && !only.length) {
 }
 // 仅支持 Windows：别的平台不是「一片红」的问题，是根本不该跑（审计 R-2）
 if (process.platform !== 'win32') {
-  console.error('dsh-env-bootstrap 仅支持 Windows（当前平台: ' + process.platform + '）');
+  console.error('win-env-bootstrap 仅支持 Windows（当前平台: ' + process.platform + '）');
   process.exit(64);
 }
 
@@ -102,7 +102,7 @@ if (only.length) {
 if (noSelfcheck) todo = todo.filter((m) => m.id !== 'M');
 
 say('');
-say('=== dsh-env-bootstrap · verify ===');
+say('=== win-env-bootstrap · verify ===');
 say('时间: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }));
 say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
 if (moduleNote) say(moduleNote);
@@ -175,7 +175,7 @@ const s = summary(c);
 
 if (json || jsonl) {
   const payload = {
-    tool: 'dsh-env-bootstrap/verify',
+    tool: 'win-env-bootstrap/verify',
     version: 1,
     host: os.hostname(),
     platform: os.platform() + ' ' + os.arch(),

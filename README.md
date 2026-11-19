@@ -1,25 +1,37 @@
-# dsh-env-bootstrap
+# win-env-bootstrap
 
-**换机第二阶段：公开工具装齐 + 十八类自检。**
+**通用 Windows 换机内核 + 可选 DSH 专属层：公开工具装齐 + 十八类自检。**
 
 > [English](README.en.md) · 中文
 
 > 🔧 **要维护或修改它** → 读 [MAINTAINING.md](MAINTAINING.md)（文件地图、三条铁律、踩过的坑、还没做的事）。
 
-DSH（DeepSeek Harness）桌面端的**环境补齐与自检**技能。能自动装的那部分用 winget / pip 装上，
-PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报告。
+一台新 Windows 上把常用公开工具装齐并自检的**换机内核**：能自动装的那部分用 winget / pip 装上，
+PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报告。**core 档不依赖任何 agent 框架**——
+不是 DSH 用户也能直接用；DSH（DeepSeek Harness）用户额外获得专属层（插件前置修复、人格/技能库检查等）。
 
-> Second stage of a DSH setup on Windows: install the public tools, add missing PATH entries,
-> run 18 categories of checks, print a Chinese report. It does not install DSH itself. Full English docs: [README.en.md](README.en.md).
+> A generic Windows machine-migration kernel: install the public tools, fix missing PATH entries,
+> run 18 categories of checks, print a Chinese report. The `core` profile has zero agent-framework
+> dependencies; a `dsh` profile adds the DSH-specific layer on top. Full English docs: [README.en.md](README.en.md).
 
-## 两阶段：谁负责哪一段
+## 两种用法（core / dsh 双档）
+
+| 档 | 给谁 | 跑什么 |
+|---|---|---|
+| **core（通用内核）** | 任何换机用户、任何 agent/开发框架 | A–F 核心运行时/归档/媒体/浏览器/逆向/Python 包、I 系统配置、J 网络、K 代理自启、O 系统环境、P 迁移完整性——只依赖 Windows + winget/pip/npm |
+| **dsh（专属层）** | DSH 用户（在 core 之上追加） | 00 人工前置、G DSH 本体、G2 插件加载前置修复、H 人格/技能库、L 工作区脚本、M 总检、N 技能级依赖 |
+
+默认**自动探测**：检测到 DSH 安装或 `~/.dsh` 就两档都跑，否则只跑 core（专属段跳过并提示一行）。
+显式指定：`verify.mjs --profile=core|dsh`、`bootstrap.ps1 -Profile Core|Dsh`。
+
+## DSH 用户的两阶段：谁负责哪一段
 
 | 阶段 | 谁做 | 内容 |
 |---|---|---|
 | **一（前提）** | 人 + 官方安装器 | 装 DSH 本体；拷工作区目录和 `~/.dsh\`（含 `profiles\desktop\node_modules`）；填 `.credentials.yaml` |
-| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 18 类自检出中文报告 |
+| **二（本工具）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 18 类自检出中文报告 |
 
-阶段一没做完，阶段二只能报一堆红——它不代替阶段一。
+阶段一没做完，dsh 档只能报一堆红——它不代替阶段一。**core 档没有这个前置。**
 
 ## 它解决什么问题
 
@@ -31,9 +43,9 @@ PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报
 - PowerShell 5.1 读中文路径乱码
 - curl 其实是 Invoke-WebRequest 的别名
 - 加速器把系统代理抢走，设了也白设
-- **profile 里那几个手工放的包，pnpm install 补不回来**
+- **profile 里那几个手工放的包，pnpm install 补不回来**（DSH 专属层项）
 
-这些每台机器都要重新踩一遍。这个技能把它们固化成两个脚本。
+这些每台机器都要重新踩一遍。这个工具把它们固化成两个脚本。
 
 ## 它不解决什么
 
@@ -225,15 +237,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Revert
 | 计划任务 `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
 | G2 修复产物 | `profiles\desktop\node_modules` 下新建的 junction / 拷贝的包删掉即可；`-Apply` 结束时会自动打印本次 G2 变更清单和配对回滚命令；脚本只补缺，已有的一律跳过 |
 
-## 作为 DSH 技能安装
+## 作为技能安装（任意框架）
 
-把整个目录放到工作区的技能库，DSH 会自动识别 SKILL.md 的 frontmatter 并注册：
+把整个目录放到工作区的技能库，DSH 及兼容 SKILL.md frontmatter 的 agent 框架都会自动识别并注册：
 
 ```
-<workspace>\.agents\skills\dsh-env-bootstrap\
+<workspace>\.agents\skills\win-env-bootstrap\
 ```
 
-之后说「装环境」「换电脑」「bootstrap」就能触发。
+之后说「装环境」「换电脑」「bootstrap」就能触发。不作为技能用也行——直接跑 `scripts\` 下的脚本就是完整功能。
 
 ## 首次使用：指定工作区
 

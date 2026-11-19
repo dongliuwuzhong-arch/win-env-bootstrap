@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-env-bootstrap / MCP server（只读三件套）
+ * win-env-bootstrap / MCP server（只读三件套）
  *
  * 让 agent 直接发现「这台机器有什么工具、在哪、什么版本、缺什么会坏什么」，
  * 而不是靠人转述路径或自己 which。
@@ -232,7 +232,7 @@ process.stdin.on('data', async (chunk) => {
         reply(msg.id, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'dsh-env-bootstrap', version: '1.0.0' },
+          serverInfo: { name: 'win-env-bootstrap', version: '1.0.0' },
         });
       } else if (msg.method === 'tools/list') {
         reply(msg.id, { tools: TOOLS });

@@ -1,5 +1,5 @@
 <#
-  dsh-env-bootstrap / tweaks.ps1 - opt-in Windows tuning.
+  win-env-bootstrap / tweaks.ps1 - opt-in Windows tuning.
   Separated from environment completion on purpose: bootstrap.ps1 converges the
   toolchain, this script only touches OS settings you explicitly name.
   Report-first: -List probes state and changes nothing; -Apply / -Revert act.

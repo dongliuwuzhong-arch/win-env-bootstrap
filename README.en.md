@@ -1,22 +1,36 @@
-# dsh-env-bootstrap
+# win-env-bootstrap
 
-**Stage 2 of a DSH machine migration: install the public toolchain + an 18-section self-check.**
+**A generic Windows machine-migration kernel + an optional DSH-specific layer: install the public toolchain + an 18-section self-check.**
 
 > English · [中文](README.md)
 > 🔧 **Maintaining or modifying this?** Read [MAINTAINING.md](MAINTAINING.md) — file map, three hard rules, past traps, known gaps.
 
-An **environment completion & self-check** skill for the DSH (DeepSeek Harness) desktop app on Windows.
-Whatever can be auto-installed is installed via winget / pip; missing PATH entries are appended;
-everything else is report-only. 18 check sections, final report in Chinese.
+A **machine-migration kernel** for a fresh Windows box: whatever can be auto-installed is installed
+via winget / pip; missing PATH entries are appended; everything else is report-only. 18 check
+sections, final report in Chinese. **The `core` profile has zero agent-framework dependencies** —
+use it with any stack; DSH (DeepSeek Harness) users get an extra layer on top (plugin load-prerequisite
+repairs, persona/skill-library checks, and more).
 
-## Two stages: who does what
+## Two profiles (core / dsh)
+
+| Profile | For | What runs |
+|---|---|---|
+| **core (generic kernel)** | any machine migration, any agent/dev stack | A–F runtime/archive/media/browser/reverse/python, I system config, J network, K proxy & autostart, O system env, P migration integrity — Windows + winget/pip/npm only |
+| **dsh (specific layer)** | DSH users, on top of core | 00 manual prerequisites, G DSH host, G2 plugin load-prerequisite repair, H persona/skill library, L workspace scripts, M overall check, N skill-level deps |
+
+Default is **auto-detection**: if a DSH install or `~/.dsh` is found both profiles run, otherwise
+core only (skipped sections are noted in one line). Override with `verify.mjs --profile=core|dsh`
+or `bootstrap.ps1 -Profile Core|Dsh`.
+
+## DSH users: two stages, who does what
 
 | Stage | Who | What |
 |---|---|---|
 | **One (prerequisite)** | Human + official installer | Install the DSH host; copy the workspace and `~/.dsh\` (including `profiles\desktop\node_modules`); fill in `.credentials.yaml` |
-| **Two (this skill)** | `bootstrap.ps1` + `verify.mjs` | Install the public toolchain, append missing PATH entries, repair G2 plugin load prerequisites, run the 18-section self-check |
+| **Two (this tool)** | `bootstrap.ps1` + `verify.mjs` | Install the public toolchain, append missing PATH entries, repair G2 plugin load prerequisites, run the 18-section self-check |
 
-Without stage one, stage two just prints red lines — it does not replace stage one.
+Without stage one the dsh profile just prints red lines — it does not replace stage one.
+**The core profile has no such prerequisite.**
 
 ## The problem it solves
 
@@ -28,9 +42,9 @@ Migrating machines is never about installing the app itself. It is the ring of p
 - PowerShell 5.1 mangling CJK paths
 - `curl` actually being an alias of Invoke-WebRequest
 - A VPN/accelerator silently stealing the system proxy
-- **The five hand-placed packages under the profile that `pnpm install` never restores**
+- **The five hand-placed packages under the profile that `pnpm install` never restores** (dsh layer only)
 
-Every machine steps on these again. This skill freezes the fixes into two scripts.
+Every machine steps on these again. This tool freezes the fixes into two scripts.
 
 ## What it does NOT do
 
@@ -220,15 +234,17 @@ up front and tell you to reboot and re-run — driver-level packages interrupted
 | Scheduled task `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
 | G2 repair artifacts | delete the junction / copied packages under `profiles\desktop\node_modules`; every `-Apply` prints a G2 change list with paired rollback commands; gaps-only means nothing else was touched |
 
-## Install as a DSH skill
+## Install as a skill (any framework)
 
-Drop the whole directory into your workspace's skill library; DSH registers it from the SKILL.md frontmatter automatically:
+Drop the whole directory into your workspace's skill library; DSH and any SKILL.md-frontmatter-compatible
+agent framework registers it automatically:
 
 ```
-<workspace>\.agents\skills\dsh-env-bootstrap\
+<workspace>\.agents\skills\win-env-bootstrap\
 ```
 
-Then say "装环境" / "换电脑" / "bootstrap" to trigger it.
+Then say "装环境" / "换电脑" / "bootstrap" to trigger it. Using it as a skill is optional —
+running the scripts under `scripts\` directly is the full feature set.
 
 ## First use: point it at your workspace
 
