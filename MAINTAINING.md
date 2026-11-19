@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 68 个文件 / 5730 行代码 / 133 条 node 测试 + 26 条 Pester（2026-11-19 实测） |
+| 规模 | 68 个文件 / 5730 行代码 / 133 条 node 测试 + 30 条 Pester（2026-11-20 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 133/133、Pester 26/26 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 133/133、Pester 30/30 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -52,7 +52,7 @@ cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
 node --test "tests/**/*.test.mjs"                    # 133 条，必须全过
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 26 条，必须全过
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 30 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
@@ -104,7 +104,7 @@ scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool
 scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
 tests/*.mjs              133 条契约测试，每条钉住一个真实发生过的 bug
-tests-ps/*.tests.ps1     26 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
+tests-ps/*.tests.ps1     30 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
 .github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
 LICENSE / .gitignore     MIT / 备份与临时件忽略

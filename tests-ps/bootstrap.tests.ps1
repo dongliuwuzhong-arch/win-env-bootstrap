@@ -187,3 +187,41 @@ Describe 'Get-WingetId' {
         Get-WingetId 'zz' 'fallback' | Should -Be 'fallback'
     }
 }
+
+Describe 'DryRun 计划预览（审计 R7 -DryRun 回归）' {
+    BeforeEach {
+        $script:dryRun = $true
+        # Install-Pkg 读的是裸变量 $Apply（脚本参数），测试作用域必须给它真值
+        # 否则会先走进「-not $Apply」的探测分支，dryRun 守卫根本到不了
+        $script:Apply = $true
+        $script:setVal = $null
+        $script:msgs = @()
+        Mock Write-Host { $script:msgs += [string]$PesterBoundParameters['Object'] }
+        Mock Set-UserPath { param($value) $script:setVal = $value }
+        Mock Set-Content { }
+        $script:gapsFound = 0; $script:gapsLeft = 0; $script:segBase = 0
+        $script:warns = 0; $script:fixes = 0
+    }
+    AfterEach { $script:dryRun = $false; $script:Apply = $false }
+    It 'Add-PathEntry 只出 plan 不写 PATH' {
+        Add-PathEntry 'C:\X' | Should -Be $true
+        $script:setVal | Should -Be $null
+        ($script:msgs -join ' ') | Should -Match 'plan:'
+    }
+    It 'Install-Pip 只出 plan 不调 pip（用假解释器名防误伤）' {
+        Install-Pip 'zzz-not-a-real-python-9527' 'pillow' 'python:pillow'
+        $script:fixes | Should -Be 0
+        ($script:msgs -join ' ') | Should -Match 'plan: .*pip install'
+    }
+    It 'Remove-PathDuplicates 只出 plan 不写' {
+        Mock Get-UserPath { 'C:\A;C:\A' }
+        Remove-PathDuplicates
+        $script:setVal | Should -Be $null
+        ($script:msgs -join ' ') | Should -Match 'plan: dedupe'
+    }
+    It 'Install-Pkg 只出 plan 不调 winget' {
+        Mock Get-Command { throw 'must not resolve winget in dry-run' }
+        Install-Pkg 'Some.Id' 'Some Tool' $true 'zzz-cmd' '--version'
+        ($script:msgs -join ' ') | Should -Match 'plan: winget install'
+    }
+}

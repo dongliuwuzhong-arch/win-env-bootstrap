@@ -65,6 +65,9 @@ PowerShell 5.1 是 Windows 10/11 自带的，所以引导层必须是它。装�
 # 1. 只探测，不改任何东西
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Check
 
+# 1.5 变更预览（可选）：-DryRun 走 -Apply 的判断逻辑，每个写动作只打 "plan:" 不动手
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -DryRun
+
 # 2. 装缺失的 + 配 PATH
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Apply
 
@@ -220,7 +223,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Revert
 | 用户 PATH 去重 | 每次去重前备份到 `~/.dsh/path-dedup-*.txt`，覆盖回去即可 |
 | `HKCU\...\Run\DSH` | `Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name DSH` |
 | 计划任务 `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
-| G2 修复产物 | `profiles\desktop\node_modules` 下新建的 junction / 拷贝的包删掉即可；脚本只补缺，已有的一律跳过 |
+| G2 修复产物 | `profiles\desktop\node_modules` 下新建的 junction / 拷贝的包删掉即可；`-Apply` 结束时会自动打印本次 G2 变更清单和配对回滚命令；脚本只补缺，已有的一律跳过 |
 
 ## 作为 DSH 技能安装
 

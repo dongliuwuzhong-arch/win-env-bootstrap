@@ -9,7 +9,10 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File bootstrap.ps1 -Apply -WithProxy
     powershell -NoProfile -ExecutionPolicy Bypass -File bootstrap.ps1 -Apply -WithScheduledTasks
     powershell -NoProfile -ExecutionPolicy Bypass -File bootstrap.ps1 -RepairG2
+    powershell -NoProfile -ExecutionPolicy Bypass -File bootstrap.ps1 -DryRun
 
+  -DryRun walks the -Apply code path but every write prints "plan: ..." and
+  returns - a change preview, nothing on the machine is touched.
   -RepairG2 repairs the G2 "plugin load prerequisites" block (host node_modules
   copies, the dsh-compaction-basic junction, local plugins, credentials template).
   -Apply implies -RepairG2. Everything is detect-then-fix: a second run changes
@@ -18,6 +21,7 @@
 param(
     [switch]$Check,
     [switch]$Apply,
+    [switch]$DryRun,
     [switch]$WithProxy,
     [switch]$WithScheduledTasks,
     [switch]$RepairG2,
@@ -39,6 +43,11 @@ $script:fixes = 0
 # -RepairG2 is the explicit switch; -Apply implies it (a bare-machine run should
 # end usable, not just "installed some tools").
 $script:doG2 = ($RepairG2 -or $Apply)
+# -DryRun: run the -Apply path for detection, but every write becomes a "plan:" line.
+$script:dryRun = [bool]$DryRun
+if ($DryRun) { $Apply = $true }
+# G2 write log - printed at the end of the G2 section with paired rollback commands.
+$script:g2Changes = @()
 $script:manifestPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'config\manifest.json'
 $script:manifestLoaded = $false
 $script:manifest = $null
@@ -107,12 +116,17 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
                     # replace with a junction so host upgrades keep following.
                     # If junction creation fails the rename MUST roll back - a vanished
                     # package is worse than a stale copy (audit N2).
+                    if ($script:dryRun) {
+                        Say "  plan: relink $pkg -> $src (keep old copy as .bak)" 'info'
+                        continue
+                    }
                     $bak = $dst + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
                     try {
                         Rename-Item -LiteralPath $dst -NewName (Split-Path -Leaf $bak) -ErrorAction Stop
                         try {
                             New-Item -ItemType Junction -Path $dst -Target $src -ErrorAction Stop | Out-Null
                             Say "  relinked $pkg -> $src (old copy kept at $bak)" 'fix'
+                            $script:g2Changes += ('junction ' + $dst + '  (rollback: Remove-Item ' + $dst + '; Rename-Item ' + $bak + ' -> ' + (Split-Path -Leaf $dst) + ')')
                         } catch {
                             if (Test-Path -LiteralPath $bak) { Rename-Item -LiteralPath $bak -NewName (Split-Path -Leaf $dst) -ErrorAction SilentlyContinue }
                             Say "  relink $pkg failed, rolled back to plain copy: $_" 'bad'
@@ -130,11 +144,16 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
             Say "  $pkg missing - rerun with -RepairG2 to copy from host" 'bad'
             continue
         }
+        if ($script:dryRun) {
+            Say "  plan: $($pkg) from host ($src)" 'info'
+            continue
+        }
         if (-not (Test-Path -LiteralPath $scope)) { New-Item -ItemType Directory -Path $scope -Force | Out-Null }
         try {
             if ($pkg -eq $cfg.junctionPackage) {
                 New-Item -ItemType Junction -Path $dst -Target $src -ErrorAction Stop | Out-Null
                 Say "  linked $pkg -> $src" 'fix'
+                $script:g2Changes += ('junction ' + $dst + '  (rollback: Remove-Item ' + $dst + ')')
             } else {
                 Copy-Tree $src $dst
                 # Verify after copy: an interrupted copy leaves a half package that
@@ -145,6 +164,7 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
                     Say "  copied $pkg but package.json is missing - copy was incomplete" 'bad'
                 } else {
                     Say "  copied $pkg from host" 'fix'
+                    $script:g2Changes += ('copy ' + $dst + '  (rollback: Remove-Item ' + $dst + ')')
                 }
             }
         } catch { Say "  repair $pkg failed: $_" 'bad' }
@@ -167,9 +187,14 @@ function Repair-LocalPlugins($profNM, $dshHome, $cfg) {
             Say "  plugin $name missing - rerun with -RepairG2 to copy from $srcRoot" 'bad'
             continue
         }
+        if ($script:dryRun) {
+            Say "  plan: copy plugin $name from $srcRoot" 'info'
+            continue
+        }
         try {
             Copy-Tree $src $dst
             Say "  copied plugin $name from $srcRoot" 'fix'
+            $script:g2Changes += ('copy ' + $dst + '  (rollback: Remove-Item ' + $dst + ')')
         } catch { Say "  copy plugin $name failed: $_" 'bad' }
     }
 }
@@ -194,6 +219,7 @@ function New-CredentialsTemplate($dshHome) {
     $cred = Join-Path $dshHome '.credentials.yaml'
     if (Test-Path -LiteralPath $cred) { Say ".credentials.yaml present, skip" 'ok'; return }
     if (-not $script:doG2) { Say ".credentials.yaml missing - rerun with -RepairG2 for a comment-only template" 'warn'; return }
+    if ($script:dryRun) { Say "plan: write .credentials.yaml comment-only template" 'info'; return }
     # Comment-only document on purpose: dsh-credentials-local treats an empty
     # document as an empty store, while any value written here would read as a
     # real key and fail auth later with a misleading error.
@@ -214,6 +240,7 @@ function New-CredentialsTemplate($dshHome) {
     try {
         Set-Content -LiteralPath $cred -Value $lines -Encoding ASCII
         Say "wrote .credentials.yaml template (comments only, no values)" 'fix'
+        $script:g2Changes += ('template ' + $cred + '  (rollback: Remove-Item ' + $cred + ')')
     } catch { Say "write .credentials.yaml template failed: $_" 'warn' }
 }
 
@@ -278,7 +305,14 @@ function Get-CmdVersion($exe, $argList) {
         # print their version banner there). Only skip EMPTY lines.
         foreach ($line in @($raw)) {
             $t = ($line -as [string]).Trim()
-            if ($t) { return $t }
+            if ($t) {
+                # Banner-first tools (7z with no args prints the copyright line)
+                # - extract the version number instead of the whole banner (audit P3-5).
+                if ($t -match 'Copyright|License|Usage:') {
+                    if ($t -match '(\d+\.\d+(\.\d+)*)') { return $Matches[1] }
+                }
+                return $t
+            }
         }
     } catch { }
     return $null
@@ -311,6 +345,7 @@ function Prune-Backups($dir, $pattern) {
 }
 
 function Add-PathEntry($dir) {
+    if ($script:dryRun) { Say "plan: add to user PATH: $dir" 'info'; return $true }
     $p = Get-UserPath
     if (-not $p) { $p = '' }
     # Backup into ~/.dsh, not C:\Windows\Temp (gets cleaned, nobody looks there)
@@ -341,6 +376,7 @@ function Add-PathEntry($dir) {
 
 function Remove-PathDuplicates {
     # Real dedupe (docs used to claim auto-dedupe while the code never did it).
+    if ($script:dryRun) { Say "plan: dedupe user PATH (backup first)" 'info'; return }
     $p = Get-UserPath
     if (-not $p) { return }
     $parts = @($p -split ';' | Where-Object { $_ -ne '' })
@@ -410,6 +446,10 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
         else { Say "$label missing - rerun with -Apply to install ($id)" 'bad' }
         return
     }
+    if ($script:dryRun) {
+        Say "plan: winget install --id $id --exact ($label)" 'info'
+        return
+    }
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Say "$label missing, winget unavailable - install manually" 'bad'
         return
@@ -453,6 +493,7 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
 }
 
 function Install-Pip($pyExe, $pkg, $label) {
+    if ($script:dryRun) { Say "plan: $pyExe -m pip install $pkg ($label)" 'info'; return }
     # $LASTEXITCODE survives across statements - if the call throws,
     # it still holds the PREVIOUS command's code, so we would lie
     # about installing successfully.
@@ -480,7 +521,9 @@ function Export-Inventory {
     $inv = [ordered]@{ generated = (Get-Date -Format 'o'); host = $env:COMPUTERNAME; wingetFile = $wg }
     # winget export is Microsoft's own machine-migration inventory format
     $global:LASTEXITCODE = -1
-    try { & winget export --output $wg --accept-source-agreements 2>&1 | Out-Null } catch { }
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        try { & winget export --output $wg --accept-source-agreements 2>&1 | Out-Null } catch { }
+    } else { $inv.wingetSkipped = 'winget not available' }
     $inv.wingetExported = ($LASTEXITCODE -eq 0)
     # Get-Command resolves the Microsoft Store python stub (exit 9009) - gate it through
     # Get-CmdVersion's double criteria first. Every section carries an Ok flag so error
@@ -515,12 +558,14 @@ function Export-Inventory {
     }
     $inv.npmGlobal = ''
     $inv.npmGlobalOk = $false
-    try {
-        $raw = ((& npm -g list --depth=0 --json 2>&1) | Out-String).Trim()
-        $null = $raw | ConvertFrom-Json -ErrorAction Stop
-        $inv.npmGlobal = $raw
-        $inv.npmGlobalOk = $true
-    } catch { }
+    if (Get-Command npm -ErrorAction SilentlyContinue) {
+        try {
+            $raw = ((& npm -g list --depth=0 --json 2>&1) | Out-String).Trim()
+            $null = $raw | ConvertFrom-Json -ErrorAction Stop
+            $inv.npmGlobal = $raw
+            $inv.npmGlobalOk = $true
+        } catch { }
+    } else { $inv.npmSkipped = 'npm not available' }
     # WriteAllText without BOM: PS 5.1 Set-Content -Encoding UTF8 writes a BOM and
     # JSON.parse on the node side chokes on it (#8)
     [System.IO.File]::WriteAllText($out, ($inv | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
@@ -529,7 +574,7 @@ function Export-Inventory {
 
 Write-Host ""
 Write-Host "=== dsh-env-bootstrap ===" -ForegroundColor Cyan
-Write-Host ("mode : " + $(if ($Apply) { 'APPLY' } else { 'CHECK' }))
+Write-Host ("mode : " + $(if ($script:dryRun) { 'DRYRUN' } elseif ($Apply) { 'APPLY' } else { 'CHECK' }))
 Write-Host ("host : " + [Environment]::OSVersion.VersionString)
 Write-Host ("pwsh : " + $PSVersionTable.PSVersion.ToString())
 Write-Host ("arch : " + $env:PROCESSOR_ARCHITECTURE)
@@ -646,7 +691,9 @@ if ($pnpm) { Say "pnpm $pnpm" 'ok' }
 elseif ($pnpmBundled) { Say "pnpm shipped with DSH ($pnpmBundled)" 'ok' }
 else {
     Say "pnpm not found (neither in PATH nor bundled with DSH)" 'bad'
-    if ($Apply -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+    if ($Apply -and $script:dryRun) {
+        Say "plan: npm install -g pnpm" 'info'
+    } elseif ($Apply -and (Get-Command npm -ErrorAction SilentlyContinue)) {
         Say "installing pnpm via npm -g ..."
         & npm install -g pnpm 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { Say "pnpm installed" 'fix' } else { Say "pnpm install failed" 'warn' }
@@ -703,6 +750,8 @@ if (Test-Path -LiteralPath (Join-Path $pptrDir 'node_modules\puppeteer')) {
     Say "puppeteer present" 'ok'
 } elseif (-not (Test-Path -LiteralPath $pptrDir)) {
     Say "puppeteer not installed (workspace _tools\browser missing)" 'warn'
+} elseif ($Apply -and $script:dryRun) {
+    Say "plan: npm install puppeteer in $pptrDir" 'info'
 } elseif ($Apply) {
     Say "installing puppeteer in _tools\browser ..."
     try {
@@ -874,6 +923,13 @@ if (-not (Test-Path -LiteralPath $profNM)) {
 }
 New-CredentialsTemplate $dshHome
 
+# G2 write log with paired rollback commands (audit P3-10): what this run touched
+# and how to take it back, without guessing from the README later.
+if ($script:g2Changes.Count -gt 0) {
+    Say 'G2 changes this run (paired rollback commands):' 'info'
+    foreach ($c in $script:g2Changes) { Say ('  ' + $c) 'info' }
+}
+
 # DSH host itself and an over-new soul db are guidance only - this script does
 # not install the host and must not "fix" a schema gate by downgrading data.
 if (-not $DshRoot) { Say "DSH host missing: install it with the official installer, then rerun (this script never installs the host)" 'bad' }
@@ -893,7 +949,8 @@ if (Test-Path $wsPath) {
         if (Test-Path $full) { Say "  $n" 'ok' }
         else {
             Say "  missing: $n" 'warn'
-            if ($Apply) { New-Item -ItemType Directory -Path $full -Force | Out-Null; Say "  created: $n" 'fix' }
+            if ($Apply -and $script:dryRun) { Say "  plan: create dir $n" 'info' }
+            elseif ($Apply) { New-Item -ItemType Directory -Path $full -Force | Out-Null; Say "  created: $n" 'fix' }
         }
     }
     $personaDir = Join-Path $wsPath ('knowledge\persona')
@@ -961,7 +1018,8 @@ elseif ($epLM -ne 'Undefined') { $epEff = $epLM }
 elseif ($epCU -ne 'Undefined') { $epEff = $epCU }
 if ($epEff -eq 'Restricted' -or $epEff -eq 'AllSigned') {
     Say "ExecutionPolicy effective = $epEff (blocks scripts; CU=$epCU LM=$epLM)" 'bad'
-    if ($Apply) {
+    if ($Apply -and $script:dryRun) { Say "plan: set ExecutionPolicy CurrentUser -> RemoteSigned" 'info' }
+    elseif ($Apply) {
         Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
         Say "set ExecutionPolicy CurrentUser -> RemoteSigned" 'fix'
     }
@@ -1005,6 +1063,8 @@ if ($WithProxy -and $Apply) {
     $vbs = Join-Path $dshHome 'start-dsh-proxy.vbs'
     if (-not $dshExe) {
         Say "DSH exe not found, skip" 'warn'
+    } elseif ($script:dryRun) {
+        Say "plan: write proxy launcher $vbs (UTF-16LE) + register Run key DSH" 'info'
     } else {
         $vbsBody = @'
 ' Auto-generated by dsh-env-bootstrap
@@ -1054,10 +1114,13 @@ if ($WithScheduledTasks -and $Apply -and $script:hasDsh) {
         if ($nodeCmd) { $nodeExe = $nodeCmd.Source }
         $act = New-ScheduledTaskAction -Execute $nodeExe -Argument ('"' + $exportScript + '" --days=3') -WorkingDirectory $wsPath
         $trg = New-ScheduledTaskTrigger -Daily -At '23:30'
-        try {
-            Register-ScheduledTask -TaskName 'DSH-DialogArchive' -Action $act -Trigger $trg -Description 'DSH daily dialog archive' -Force | Out-Null
-            Say "registered DSH-DialogArchive (daily 23:30)" 'fix'
-        } catch { Say "failed to register task: $_" 'warn' }
+        if ($script:dryRun) { Say "plan: register scheduled task DSH-DialogArchive (daily 23:30, $nodeExe)" 'info' }
+        else {
+            try {
+                Register-ScheduledTask -TaskName 'DSH-DialogArchive' -Action $act -Trigger $trg -Description 'DSH daily dialog archive' -Force | Out-Null
+                Say "registered DSH-DialogArchive (daily 23:30)" 'fix'
+            } catch { Say "failed to register task: $_" 'warn' }
+        }
     } else {
         Say "session-export.mjs missing, skip task" 'warn'
     }

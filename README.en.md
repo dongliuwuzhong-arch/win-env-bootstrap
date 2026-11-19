@@ -60,6 +60,9 @@ Probe first (read-only), then decide what to install:
 # 1. probe only, changes nothing
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Check
 
+# 1.5 change preview (optional): -DryRun walks the -Apply logic, every write prints "plan:" only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -DryRun
+
 # 2. install what is missing + fix PATH
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Apply
 
@@ -215,7 +218,7 @@ up front and tell you to reboot and re-run — driver-level packages interrupted
 | User PATH dedupe | every dedupe backs up to `~/.dsh/path-dedup-*.txt` first — copy it back |
 | `HKCU\...\Run\DSH` | `Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name DSH` |
 | Scheduled task `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
-| G2 repair artifacts | delete the junction / copied packages under `profiles\desktop\node_modules`; gaps-only means nothing else was touched |
+| G2 repair artifacts | delete the junction / copied packages under `profiles\desktop\node_modules`; every `-Apply` prints a G2 change list with paired rollback commands; gaps-only means nothing else was touched |
 
 ## Install as a DSH skill
 

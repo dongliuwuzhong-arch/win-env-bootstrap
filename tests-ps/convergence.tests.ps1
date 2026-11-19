@@ -50,8 +50,11 @@ exit /b 0
         $env:USERPROFILE = $script:SBHOME
         $env:STUB_LOG = $script:STUBLOG
         try {
-            $p = Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $script:BOOTSTRAP + '"'), '-Apply', '-Workspace', ('"' + $script:WS + '"')) -Wait -PassThru -NoNewWindow
-            return $p.ExitCode
+            # 原生调用，不用 Start-Process：Start-Process 会把环境变量灌进大小写不敏感的
+            # .NET 字典，机器上同时存在 HTTPS_PROXY/https_proxy 时直接抛
+            # "已添加项"（2026-11-20 实测）。原生调用继承原始环境块，没有这个问题。
+            & powershell -NoProfile -ExecutionPolicy Bypass -File $script:BOOTSTRAP -Apply -Workspace $script:WS | Out-Null
+            return $LASTEXITCODE
         } finally {
             foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
         }
