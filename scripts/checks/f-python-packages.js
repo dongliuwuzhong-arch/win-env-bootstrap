@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { ok, warn, info } from '../lib/report.js';
 
 export const id = 'F';
@@ -22,7 +23,7 @@ export async function check(ctx) {
   // DSH 自带的 python 是另一套包（runtime.json 里列了 numpy/pandas/openpyxl/Pillow/lxml，
   // 但没有 PyYAML）。系统 python 有 ≠ DSH 的 python 有。
   const dshPy = ctx.firstExisting([
-    'C:\\Software\\DSH\\resources\\runtime\\primary-runtime\\dependencies\\python\\python.exe',
+    ...(ctx.DSH_ROOT ? [join(ctx.DSH_ROOT, 'resources', 'runtime', 'primary-runtime', 'dependencies', 'python', 'python.exe')] : []),
     ctx.pathJoin(ctx.HOME, '.dsh', 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'python', 'python.exe'),
   ]);
   if (dshPy) {

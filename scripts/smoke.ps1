@@ -95,6 +95,17 @@ try {
         }
     }
 
+    # ---------- 5/5 bootstrap -Check exit code ----------
+    # bootstrap 自己的退出码语义（0/1/2）此前没人验证过，只测了 verify 的。
+    Head '5/5 bootstrap -Check exit code'
+    $bOut = (& powershell -NoProfile -ExecutionPolicy Bypass -File 'scripts/bootstrap.ps1' -Check 2>&1 | Out-String)
+    $bCode = $LASTEXITCODE
+    if ($bCode -eq 0 -or $bCode -eq 1 -or $bCode -eq 2) {
+        Ok ('bootstrap -Check exit ' + $bCode + ' (0 all pass / 1 hard gap / 2 warnings only)')
+    } else {
+        No ('bootstrap -Check exit ' + $bCode + ' - not in 0/1/2, the script itself crashed')
+    }
+
     # ---------- summary ----------
     Head 'summary'
     if ($script:fail -eq 0) {

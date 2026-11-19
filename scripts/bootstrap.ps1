@@ -29,6 +29,7 @@ $ErrorActionPreference = 'Continue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $script:gapsFound = 0
 $script:gapsLeft = 0
+$script:segBase = 0
 $script:warns = 0
 $script:fixes = 0
 
@@ -192,8 +193,9 @@ function Say($msg, $level = 'info') {
         'ok'   { Write-Host "[ OK ] $msg" -ForegroundColor Green }
         'warn' { Write-Host "[WARN] $msg" -ForegroundColor Yellow; $script:warns++ }
         'bad'  { Write-Host "[FAIL] $msg" -ForegroundColor Red; $script:gapsFound++; $script:gapsLeft++ }
-        'fix'  { Write-Host "[FIX ] $msg" -ForegroundColor Cyan; $script:fixes++; if ($script:gapsLeft -gt 0) { $script:gapsLeft-- } }
-        'head' { Write-Host ""; Write-Host "--- $msg ---" -ForegroundColor White }
+        # 只能抵消本段产生的缺口：跨段抵消会让不相关的 fix 吃掉硬缺口，退出码虚低
+        'fix'  { Write-Host "[FIX ] $msg" -ForegroundColor Cyan; $script:fixes++; if ($script:gapsLeft -gt $script:segBase) { $script:gapsLeft-- } }
+        'head' { Write-Host ""; Write-Host "--- $msg ---" -ForegroundColor White; $script:segBase = $script:gapsLeft }
         default { Write-Host "       $msg" }
     }
 }
@@ -298,7 +300,7 @@ function Remove-PathDuplicates {
     Say "deduped user PATH: $($parts.Count) -> $($clean.Count) entries (backup: $backup)" 'fix'
 }
 
-function Install-Pkg($id, $label, $optional) {
+function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
     if (-not $Apply) {
         # Optional tools must NOT count as hard gaps - otherwise -Check exit 1
         # just because ffmpeg is missing, and the exit code stops meaning anything.
@@ -322,18 +324,9 @@ function Install-Pkg($id, $label, $optional) {
         & winget install --id $id --exact --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1 | Out-Null
         $rc = $LASTEXITCODE
         # 不信任 winget 的退出码，装完实测一遍
-        $probe = $null
-        switch -Wildcard ($label) {
-            'Node*'    { $probe = Get-CmdVersion 'node' '--version' }
-            'Python*'  { $probe = Get-CmdVersion 'python' '--version' }
-            'Git'      { $probe = Get-CmdVersion 'git' '--version' }
-            '7-Zip'    { $probe = Get-CmdVersion '7z' '' }
-            'FFmpeg'   { $probe = Get-CmdVersion 'ffmpeg' '-version' }
-            'yt-dlp'   { $probe = Get-CmdVersion 'yt-dlp' '--version' }
-            'Google Chrome' { if (Test-Path 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe') { $probe = 'chrome' } }
-            'ImageMagick'   { $probe = Get-CmdVersion 'magick' '-version' }
-            default    { $probe = $null }
-        }
+        # 按调用方显式传的命令探测，不用 $label 通配匹配 ——
+        # label 是给人看的显示字符串，一改（本地化/改名）probe 就落空。
+        $probe = if ($probeCmd) { Get-CmdVersion $probeCmd $probeArgs } else { $null }
         if ($probe) { Say "$label installed ($probe)" 'fix' }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
         elseif ($rc -eq -1978335212) { Say "$label already installed (winget -1978335212)" 'warn' }
@@ -361,7 +354,7 @@ if ($node) {
     if ($node -match 'v(\d+)') { $major = [int]$Matches[1] }
     if ($major -ge 24) { Say "node $node" 'ok' }
     else { Say "node $node (need 24+)" 'bad' }
-} else { Say "node not found" 'bad'; Install-Pkg 'OpenJS.NodeJS.LTS' 'Node.js' }
+} else { Say "node not found" 'bad'; Install-Pkg 'OpenJS.NodeJS.LTS' 'Node.js' $false 'node' '--version' }
 
 $python = Get-CmdVersion 'python' '--version'
 $pyName = 'python'
@@ -372,10 +365,10 @@ if ($python) {
         if ($pyMinor -ge 12) { Say "python $python" 'ok' }
         else { Say "python $python (need 3.12+)" 'bad' }
     } else { Say "python $python" 'ok' }
-} else { Say "python not found" 'bad'; Install-Pkg 'Python.Python.3.12' 'Python 3.12' }
+} else { Say "python not found" 'bad'; Install-Pkg 'Python.Python.3.12' 'Python 3.12' $false 'python' '--version' }
 
 $git = Get-CmdVersion 'git' '--version'
-if ($git) { Say "git $git" 'ok' } else { Say "git not found (optional but recommended)" 'warn'; Install-Pkg 'Git.Git' 'Git' -optional $true }
+if ($git) { Say "git $git" 'ok' } else { Say "git not found (optional but recommended)" 'warn'; Install-Pkg 'Git.Git' 'Git' $true 'git' '--version' }
 
 # 'curl' is an alias for Invoke-WebRequest in PS 5.1 - must use curl.exe
 $curl = Get-CmdVersion 'curl.exe' '--version'
@@ -419,16 +412,18 @@ if ($sevenDir) {
     }
 } else {
     Say "7-Zip not installed" 'bad'
-    Install-Pkg '7zip.7zip' '7-Zip'
+    Install-Pkg '7zip.7zip' '7-Zip' $false '7z' ''
 }
 
 # ============ C. media ============
 Say 'C. media' 'head'
 $ffmpeg = Get-CmdVersion 'ffmpeg' '-version'
-if ($ffmpeg) { Say "ffmpeg present" 'ok' } else { Say "ffmpeg not found (media-processor needs it)" 'warn'; Install-Pkg 'Gyan.FFmpeg' 'FFmpeg' -optional $true }
+if ($ffmpeg) { Say "ffmpeg present" 'ok' } else { Say "ffmpeg not found (media-processor needs it)" 'warn'; Install-Pkg 'Gyan.FFmpeg' 'FFmpeg' $true 'ffmpeg' '-version' }
 
 $ytdlp = Get-CmdVersion 'yt-dlp' '--version'
-if ($ytdlp) { Say "yt-dlp $ytdlp" 'ok' } else { Say "yt-dlp not found (video-transcript-downloader needs it)" 'warn'; Install-Pkg 'yt-dlp.yt-dlp' 'yt-dlp' -optional $true }
+$magick = Get-CmdVersion 'magick' '-version'
+if ($magick) { Say "ImageMagick present" 'ok' } else { Say "ImageMagick not found (optional)" 'warn'; Install-Pkg 'ImageMagick.ImageMagick' 'ImageMagick' $true 'magick' '-version' }
+if ($ytdlp) { Say "yt-dlp $ytdlp" 'ok' } else { Say "yt-dlp not found (video-transcript-downloader needs it)" 'warn'; Install-Pkg 'yt-dlp.yt-dlp' 'yt-dlp' $true 'yt-dlp' '--version' }
 
 # ============ D. browser automation ============
 Say 'D. browser automation' 'head'
@@ -439,7 +434,7 @@ $chromeCands = @(
 )
 $chrome = $null
 foreach ($c in $chromeCands) { if (Test-Path $c) { $chrome = $c; break } }
-if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg 'Google.Chrome' 'Google Chrome' -optional $true }
+if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg 'Google.Chrome' 'Google Chrome' $true 'chrome' '' }
 
 # 工作区路径：-Workspace 参数 > DSH_WORKSPACE 环境变量 > manifest.workspace.default > 内置默认
 $wsPath = $Workspace

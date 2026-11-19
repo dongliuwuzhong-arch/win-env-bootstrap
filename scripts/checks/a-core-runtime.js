@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { ok, warn, bad } from '../lib/report.js';
 
 export const id = 'A';
@@ -33,7 +34,7 @@ export async function check(ctx) {
   // 系统 PATH 里没有不算缺口。只有两边都没有才是真问题。
   const pnpmV = ctx.run('pnpm.cmd', ['--version']) || ctx.run('pnpm', ['--version']);
   const bundledPnpm = ctx.firstExisting([
-    'C:\\Software\\DSH\\resources\\runtime\\primary-runtime\\dependencies\\pnpm\\bin\\pnpm.cjs',
+    ...(ctx.DSH_ROOT ? [join(ctx.DSH_ROOT, 'resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs')] : []),
     ctx.pathJoin(ctx.HOME, '.dsh', 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs'),
   ]);
   if (pnpmV) out.push(ok('pnpm ' + pnpmV + '（系统）'));

@@ -86,8 +86,9 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -Check
           $code = $LASTEXITCODE
           Write-Host "bootstrap -Check exit = $code"
-          if ($code -ne 0 -and $code -ne 1) {
-            Write-Host "::error::bootstrap -Check 退出码 $code，不是 0/1"
+          # 契约是 0 全过 / 1 有硬缺口 / 2 仅提醒，三个都合法
+          if ($code -notin 0,1,2) {
+            Write-Host "::error::bootstrap -Check 退出码 $code，不在 0/1/2 里（脚本自己崩了）"
             exit 1
           }
 

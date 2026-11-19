@@ -9,7 +9,9 @@ export async function check(ctx) {
   const out = [];
   const join = ctx.pathJoin;
 
-  const dshExe = ctx.firstExisting(['C:\\Software\\DSH\\DeepSeek Harness.exe', 'C:\\Program Files\\DSH\\DeepSeek Harness.exe']);
+  // 用 ctx.DSH_ROOT（含注册表 InstallLocation 回退），不写死常见路径：
+  // 装在 D 盘等自定义目录时，写死会让 G 段报「宿主未找到」而 G2 段却全绿，自相矛盾。
+  const dshExe = ctx.DSH_ROOT ? join(ctx.DSH_ROOT, 'DeepSeek Harness.exe') : null;
   if (dshExe) out.push(ok('宿主: ' + dshExe));
   else out.push(bad('DSH 宿主未找到'));
 
@@ -41,7 +43,8 @@ export async function check(ctx) {
     const up = ctx.sys().env.userPath;
     const inUserPath = Boolean(up) && up.split(';').some((e) => e.trim().toLowerCase() === cliBin.toLowerCase());
     if (inUserPath) out.push(ok('DSH CLI shim 在用户 PATH'));
-    else out.push(warn('DSH CLI shim 不在用户 PATH（dsh 命令入口没了）', 'bootstrap -Apply 补 PATH'));
+    // bootstrap 的 Add-PathEntry 只被 7-Zip 调用，从不补这个目录 —— 别指向一个不会发生的动作
+    else out.push(warn('DSH CLI shim 不在用户 PATH（dsh 命令入口没了）', '手工把 ' + cliBin + ' 加进用户 PATH'));
   } else out.push(warn('DSH CLI bin 目录不存在'));
   return out;
 }

@@ -81,14 +81,15 @@ export async function check(ctx) {
     else out.push(bad('bundle 缺失 ' + missingB.length + '/' + bundles.length + ': ' + missingB.slice(0, 4).join(', ')));
   } catch (e) { out.push(warn('bundles 清单读不了: ' + String(e.message).slice(0, 60))); }
 
-  // 3) node:sqlite 可用性（部分插件用它做本地存储，需要 Node 22.5+）
+  // 3) node:sqlite 可用性（部分插件用它做本地存储）。
+  // 阈值统一按 A 段的 Node 24+ 走，不在这里另立一个 22.5+ 的口径。
   let probe = { sqlite: false };
   try {
     const raw = ctx.runNode(['-e', SOUL_PROBE, ''], { timeout: 20000 });
     if (raw) probe = JSON.parse(raw);
   } catch { }
   if (probe.sqlite) out.push(ok('node:sqlite DatabaseSync 可用'));
-  else out.push(bad('node:sqlite 不可用（需要 Node 22.5+）'));
+  else out.push(bad('node:sqlite 不可用（Node 版本不够，A 段要求的 24+ 会自动满足这一条）'));
 
   // profile 目录名必须匹配 ^[a-zA-Z0-9_-]{1,80}$，否则部分插件加载即 throw
   // （index.js:28 显式校验，且拒绝回落到共享库）
@@ -135,7 +136,14 @@ export async function check(ctx) {
     else out.push(warn('win-bash checksums.sha256 缺失（完整性校验会失败）'));
     const cacheDir = join(ctx.DSH_HOME, 'win-bash');
     let cw = false;
-    try { fs.mkdirSync(cacheDir, { recursive: true }); fs.accessSync(cacheDir, fs.constants.W_OK); cw = true; } catch { }
+    // accessSync 在 Windows 上只读 FILE_ATTRIBUTE_READONLY，不查 ACL —— 必须实写一次
+    const cacheProbe = join(cacheDir, '.dsh-probe-' + process.pid);
+    try {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(cacheProbe, 'x', { flag: 'wx' });
+      cw = true;
+    } catch { cw = false; }
+    finally { try { fs.unlinkSync(cacheProbe); } catch { } }
     if (cw) out.push(ok('win-bash 缓存目录可写'));
     else out.push(warn('win-bash 缓存目录不可写（~/.dsh/win-bash）'));
   } else out.push(info('win-bash 包不在 profile（跳过 payload 检查）'));

@@ -40,7 +40,11 @@ export async function check(ctx) {
     else if (hasDeny) out.push(info('工作区 ACL 有 DENY 条目（只拒删除子项，不挡写入）'));
     else out.push(ok('工作区 ACL 无 DENY 条目'));
     if (hasLabel) out.push(info('工作区带完整性标签（低 IL 进程可能写不进去）'));
-    // 实写测试才是真判据（accessSync 不看 ACL）
+  }
+
+  // 实写测试才是真判据（accessSync 不看 ACL）。
+  // 放在 aclOk 外面：icacls 查不到的时候，这条更该跑，不能跟着一起被跳过。
+  if (ctx.WS) {
     const probe = join(ctx.WS, '.dsh-write-probe-' + process.pid);
     let wsWritable = false;
     try { fs.writeFileSync(probe, 'x', { flag: 'wx' }); wsWritable = true; }
@@ -74,8 +78,9 @@ export async function check(ctx) {
   // Run 键里的启动器路径是否还在
   const runOut = ctx.runKey();
   if (runOut) {
-    // 原正则里 \s 在旧文件里丢了（wscript.exes+），实际从不匹配 —— 保持一致，不擅自修
-    const m = runOut.match(/wscript.exes+"([^"]+)"/i);
+    // 原来写成 /wscript.exes+/ —— 要求 exe 后面至少一个 s，实际值是 wscript.exe "..."，
+    // 永不匹配，这条检查等于没写。
+    const m = runOut.match(/wscript\.exe\s+"([^"]+)"/i);
     if (m) {
       if (ctx.exists(m[1])) out.push(ok('开机自启的启动器在: ' + path.basename(m[1])));
       else out.push(bad('开机自启指向的 vbs 不存在: ' + m[1]));
