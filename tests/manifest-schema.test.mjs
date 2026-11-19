@@ -83,8 +83,12 @@ test('tools: 每条都有 name / optional / versionArgs，且 name 不重复', (
   for (const t of manifest.tools) {
     assert.ok(typeof t.name === 'string' && t.name.trim(), '工具缺 name');
     assert.equal(typeof t.optional, 'boolean', t.name + ' 的 optional 必须是布尔值');
-    assert.ok(Array.isArray(t.versionArgs), t.name + ' 的 versionArgs 必须是数组');
-    assert.ok(t.versionArgs.every((a) => typeof a === 'string'), t.name + ' 的 versionArgs 里有非字符串');
+    // probeCmd/probeArgs 是 bootstrap 实际消费的字段；versionArgs 是旧名，两个都认。
+    // npm 包（puppeteer）没有命令行探测，靠目录存在性判断，跳过这一项。
+    if (t.npm) continue;
+    const args = t.probeArgs ?? t.versionArgs;
+    assert.ok(Array.isArray(args), t.name + ' 的 probeArgs（或 versionArgs）必须是数组');
+    assert.ok(args.every((a) => typeof a === 'string'), t.name + ' 的 probeArgs 里有非字符串');
   }
   const names = manifest.tools.map((t) => t.name);
   assert.equal(new Set(names).size, names.length, '工具名有重复');

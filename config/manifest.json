@@ -115,7 +115,10 @@
       ],
       "minMajor": 24,
       "winget": "OpenJS.NodeJS.LTS",
-      "optional": false
+      "optional": false,
+      "consumer": "verify.mjs / selfcheck / 四个 L 段脚本 / puppeteer 生态",
+      "capability": "runtime:node",
+      "degradedBehavior": "整个检查层跑不起来"
     },
     {
       "name": "python",
@@ -125,7 +128,10 @@
       "minMinor": 12,
       "winget": "Python.Python.3.12",
       "optional": false,
-      "fallback": "python3"
+      "fallback": "python3",
+      "consumer": "F 段 pip 包 / wechat-history / osint / image_*.py",
+      "capability": "runtime:python",
+      "degradedBehavior": "所有 Python 脚本失效"
     },
     {
       "name": "git",
@@ -133,7 +139,10 @@
         "--version"
       ],
       "winget": "Git.Git",
-      "optional": true
+      "optional": true,
+      "consumer": "插件自更新 / agent-reach",
+      "capability": "vcs:git",
+      "degradedBehavior": "插件更新与部分技能降级"
     },
     {
       "name": "curl.exe",
@@ -141,14 +150,20 @@
         "--version"
       ],
       "optional": true,
-      "note": "PS 5.1 里 curl 是 Invoke-WebRequest 的别名"
+      "note": "PS 5.1 里 curl 是 Invoke-WebRequest 的别名",
+      "consumer": "下载类脚本",
+      "capability": "net:http",
+      "degradedBehavior": "用 Invoke-WebRequest 替代"
     },
     {
       "name": "winget",
       "versionArgs": [
         "--version"
       ],
-      "optional": true
+      "optional": true,
+      "consumer": "bootstrap 自身",
+      "capability": "pkg:winget",
+      "degradedBehavior": "无法自动安装，只能手工"
     },
     {
       "name": "pnpm",
@@ -156,7 +171,10 @@
         "--version"
       ],
       "optional": true,
-      "note": "DSH 自带一份，系统没有不算缺口"
+      "note": "DSH 自带一份，系统没有不算缺口",
+      "consumer": "profile 依赖安装",
+      "capability": "pkg:pnpm",
+      "degradedBehavior": "DSH 自带一份，通常不受影响"
     },
     {
       "name": "7z",
@@ -167,7 +185,10 @@
         "C:\\Program Files\\7-Zip",
         "C:\\Program Files (x86)\\7-Zip"
       ],
-      "exeName": "7z.exe"
+      "exeName": "7z.exe",
+      "consumer": "解包/归档类技能",
+      "capability": "archive:7z",
+      "degradedBehavior": "压缩包解不开"
     },
     {
       "name": "ffmpeg",
@@ -175,14 +196,26 @@
         "-version"
       ],
       "winget": "Gyan.FFmpeg",
-      "optional": true
+      "optional": true,
+      "consumer": "media-processor",
+      "capability": "media:transcode",
+      "degradedBehavior": "转码/抽帧全废"
     },
     {
       "name": "ffprobe",
       "versionArgs": [
         "-version"
       ],
-      "optional": true
+      "optional": true,
+      "consumer": "video-transcript-downloader",
+      "capability": "media:probe",
+      "degradedBehavior": "取不到时长/编码，静默降级",
+      "winget": "Gyan.FFmpeg",
+      "probeCmd": "ffprobe",
+      "probeArgs": [
+        "-version"
+      ],
+      "note": "随 ffmpeg 包一起装，装完单独复测"
     },
     {
       "name": "yt-dlp",
@@ -190,7 +223,10 @@
         "--version"
       ],
       "winget": "yt-dlp.yt-dlp",
-      "optional": true
+      "optional": true,
+      "consumer": "video-transcript-downloader",
+      "capability": "media:download",
+      "degradedBehavior": "下不了视频"
     },
     {
       "name": "magick",
@@ -199,7 +235,10 @@
       ],
       "winget": "ImageMagick.ImageMagick",
       "optional": true,
-      "note": "convert 在 Windows 会撞系统磁盘工具"
+      "note": "convert 在 Windows 会撞系统磁盘工具",
+      "consumer": "image_*.py",
+      "capability": "image:convert",
+      "degradedBehavior": "图像处理技能失效"
     },
     {
       "name": "frida",
@@ -207,21 +246,76 @@
         "--version"
       ],
       "pip": "frida-tools",
-      "optional": true
+      "optional": true,
+      "consumer": "wechat-history",
+      "capability": "reverse:inject",
+      "degradedBehavior": "微信取证不可用"
     },
     {
       "name": "exiftool",
       "versionArgs": [
         "-ver"
       ],
-      "optional": true
+      "optional": true,
+      "consumer": "osint/exif.py",
+      "capability": "meta:exif",
+      "degradedBehavior": "静默降级为无元数据",
+      "winget": "ExifTool.ExifTool",
+      "probeCmd": "exiftool",
+      "probeArgs": [
+        "-ver"
+      ]
     },
     {
       "name": "dotnet",
       "versionArgs": [
         "--version"
       ],
-      "optional": true
+      "optional": true,
+      "consumer": "ff14-dalamud 自研插件编译",
+      "capability": "build:dotnet",
+      "degradedBehavior": "插件编译不了",
+      "winget": "Microsoft.DotNet.SDK.8",
+      "probeCmd": "dotnet",
+      "probeArgs": [
+        "--version"
+      ]
+    },
+    {
+      "name": "rg",
+      "winget": "BurntSushi.ripgrep.MSVC",
+      "probeCmd": "rg",
+      "probeArgs": [
+        "--version"
+      ],
+      "optional": true,
+      "consumer": "agent 文本搜索",
+      "capability": "text:search",
+      "degradedBehavior": "agent 只能用慢的替代方案",
+      "category": "agent-cli"
+    },
+    {
+      "name": "jq",
+      "winget": "jqlang.jq",
+      "probeCmd": "jq",
+      "probeArgs": [
+        "--version"
+      ],
+      "optional": true,
+      "consumer": "agent JSON 处理",
+      "capability": "json:query",
+      "degradedBehavior": "JSON 处理靠 node -e 兜底",
+      "category": "agent-cli"
+    },
+    {
+      "name": "puppeteer",
+      "npm": "puppeteer",
+      "npmDir": "_tools/browser",
+      "optional": true,
+      "consumer": "fetch-render.mjs",
+      "capability": "browser:render",
+      "degradedBehavior": "网页渲染截图不可用",
+      "category": "agent-cli"
     }
   ],
   "g2": {
@@ -253,5 +347,78 @@
     "IDENTITY.md",
     "USER.md",
     "MEMORY.md"
-  ]
+  ],
+  "pythonPackages": {
+    "system": [
+      {
+        "name": "pillow",
+        "consumer": "image_*.py",
+        "degradedBehavior": "图像处理失效"
+      },
+      {
+        "name": "pyyaml",
+        "consumer": "多数 tools/*.py",
+        "degradedBehavior": "配置解析失败"
+      },
+      {
+        "name": "frida",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用"
+      },
+      {
+        "name": "frida-tools",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用"
+      },
+      {
+        "name": "pymem",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用"
+      },
+      {
+        "name": "pycryptodome",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用"
+      }
+    ],
+    "dshBundled": [
+      {
+        "name": "numpy",
+        "consumer": "各类数据处理",
+        "degradedBehavior": "数据脚本失效"
+      },
+      {
+        "name": "pandas",
+        "consumer": "各类数据处理",
+        "degradedBehavior": "数据脚本失效"
+      },
+      {
+        "name": "openpyxl",
+        "consumer": "Excel 处理",
+        "degradedBehavior": "Excel 读写失效"
+      },
+      {
+        "name": "pillow",
+        "consumer": "图像处理",
+        "degradedBehavior": "图像处理失效"
+      },
+      {
+        "name": "lxml",
+        "consumer": "XML/HTML 解析",
+        "degradedBehavior": "解析类脚本失效"
+      }
+    ]
+  },
+  "posixAliases": {
+    "which": "where <cmd> 或 Get-Command <cmd>",
+    "sha256sum": "Get-FileHash -Algorithm SHA256 <file>",
+    "df": "Get-PSDrive 或 Get-Volume",
+    "du": "Get-ChildItem -Recurse | Measure-Object Length -Sum",
+    "stat": "Get-Item <file> | Format-List",
+    "od": "Format-Hex <file>",
+    "grep": "Select-String 或 rg",
+    "sed": "(无内置，用 node -e 或装 GnuWin32.Sed)",
+    "make": "(装 GnuWin32.Make)",
+    "unzip": "Expand-Archive 或 7z x"
+  }
 }

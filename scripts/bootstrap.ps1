@@ -447,6 +447,42 @@ $magick = Get-CmdVersion 'magick' '-version'
 if ($magick) { Say "ImageMagick present" 'ok' } else { Say "ImageMagick not found (optional)" 'warn'; Install-Pkg (Get-WingetId 'magick' 'ImageMagick.ImageMagick') 'ImageMagick' $true 'magick' '-version' }
 if ($ytdlp) { Say "yt-dlp $ytdlp" 'ok' } else { Say "yt-dlp not found (video-transcript-downloader needs it)" 'warn'; Install-Pkg (Get-WingetId 'yt-dlp' 'yt-dlp.yt-dlp') 'yt-dlp' $true 'yt-dlp' '--version' }
 
+# ffprobe ships inside the ffmpeg package but resolves separately - re-probe after
+$ffprobe = Get-CmdVersion 'ffprobe' '-version'
+if ($ffprobe) { Say "ffprobe present" 'ok' }
+elseif ($ffmpeg) { Say "ffprobe missing though ffmpeg is present - reinstall Gyan.FFmpeg" 'warn' }
+else { Say "ffprobe missing (ships with ffmpeg)" 'warn' }
+
+# agent-cli: the commands an agent reaches for first
+$rg = Get-CmdVersion 'rg' '--version'
+if ($rg) { Say "ripgrep present" 'ok' } else { Say "ripgrep not found (agent text search)" 'warn'; Install-Pkg (Get-WingetId 'rg' 'BurntSushi.ripgrep.MSVC') 'ripgrep' $true 'rg' '--version' }
+$jq = Get-CmdVersion 'jq' '--version'
+if ($jq) { Say "jq present" 'ok' } else { Say "jq not found (agent JSON handling)" 'warn'; Install-Pkg (Get-WingetId 'jq' 'jqlang.jq') 'jq' $true 'jq' '--version' }
+
+$exiftool = Get-CmdVersion 'exiftool' '-ver'
+if ($exiftool) { Say "exiftool $exiftool" 'ok' } else { Say "exiftool not found (osint/exif.py degrades silently)" 'warn'; Install-Pkg (Get-WingetId 'exiftool' 'ExifTool.ExifTool') 'exiftool' $true 'exiftool' '-ver' }
+
+# puppeteer lives inside the workspace, so it can only be installed once the workspace exists
+$pptrDir = Join-Path $wsPath '_tools\browser'
+if (Test-Path -LiteralPath (Join-Path $pptrDir 'node_modules\puppeteer')) {
+    Say "puppeteer present" 'ok'
+} elseif (-not (Test-Path -LiteralPath $pptrDir)) {
+    Say "puppeteer not installed (workspace _tools\browser missing)" 'warn'
+} elseif ($Apply) {
+    Say "installing puppeteer in _tools\browser ..."
+    try {
+        Push-Location -LiteralPath $pptrDir
+        & npm install --silent --no-audit --no-fund 2>&1 | Out-Null
+        $rc2 = $LASTEXITCODE
+        Pop-Location
+        if (Test-Path -LiteralPath (Join-Path $pptrDir 'node_modules\puppeteer')) { Say "puppeteer installed" 'fix' }
+        else { Say "puppeteer install failed (npm rc=$rc2)" 'warn' }
+    } catch { try { Pop-Location } catch { }; Say "puppeteer install failed: $_" 'warn' }
+} else { Say "puppeteer not installed - rerun with -Apply" 'warn' }
+
+$dotnet = Get-CmdVersion 'dotnet' '--version'
+if ($dotnet) { Say "dotnet $dotnet" 'ok' } else { Say "dotnet not found (ff14 plugin build)" 'warn'; Install-Pkg (Get-WingetId 'dotnet' 'Microsoft.DotNet.SDK.8') 'dotnet' $true 'dotnet' '--version' }
+
 # ============ D. browser automation ============
 Say 'D. browser automation' 'head'
 $chromeCands = @(
