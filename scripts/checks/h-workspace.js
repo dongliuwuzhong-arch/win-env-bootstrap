@@ -10,6 +10,10 @@ export async function check(ctx) {
   const join = ctx.pathJoin;
   const WS = ctx.WS;
 
+  if (!WS) {
+    out.push(bad('工作区未配置（设 DSH_WORKSPACE 或改 manifest.workspace.default）'));
+    return out;
+  }
   if (!ctx.exists(WS)) {
     out.push(bad('工作区不存在: ' + WS));
     return out;

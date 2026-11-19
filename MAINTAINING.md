@@ -2,16 +2,18 @@
 
 > 给下一个接手这个技能的会话看。**改任何东西之前先读这一份。**
 > 不是介绍功能（那在 `SKILL.md`），是「这个技能怎么被维护」——哪些地方一碰就坏、怎么验证你没改坏、哪些坑已经踩过。
+>
+> **维护约定：缺陷清单随每轮修复同步更新。改了代码不改这份表，它就重新变成骗人的东西。**
 
 ## 现在到哪了
 
 | 项 | 值 |
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
-| HEAD | 见 `git log -1`，2026-11-19 之后没再动 |
-| 规模 | 40 个文件 / 3346 行代码 / 86 条测试 |
+| HEAD | 2026-11-19 开箱即用审查修复轮（报告与逐项处置见 `docs/审查-20261119-开箱即用.md`） |
+| 规模 | 45 个文件 / 4264 行代码 / 105 条测试（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；86/86 测试 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；105/105 测试 |
 
 ⚠️ **别把它当成「新电脑一键配齐」**。文档已经诚实改口，但它离那个目标还差三件事（见文末「没做的」）。
 
@@ -47,7 +49,7 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 86 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 105 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
@@ -81,7 +83,7 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
 
 scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              86 条契约测试，每条钉住一个真实发生过的 bug
+tests/*.mjs              105 条契约测试，每条钉住一个真实发生过的 bug
 .github/workflows/ci.yml windows-latest，不含任何 -Apply
 ```
 
@@ -169,7 +171,23 @@ PS 5.1 的 `-Encoding UTF8` 会写 BOM，wscript 报 `无效字符`。正确是 
 
 `checks/*.js` 里可以有中文（Node 读 UTF-8 没问题）；`bootstrap.ps1` 里**一个都不能有**（见开头第 1 条）。
 
+### import 名 ≠ pip 分发名
+
+wechat-history 的 check-env.py 用 `importlib.util.find_spec` 查 **import 名**（Cryptodome、pysilk），
+但 `pip list` 打印的是**分发名**（pycryptodomex、silk-python）。拿 import 名去匹配 pip list，
+**装满了也永远报缺**——判据恒假，比误报更难发现。映射以
+`importlib.metadata.packages_distributions()` 为准；manifest 的 pythonPackages 一律存分发名，
+`importName` 字段只作注释，不参与匹配。
+
+### 工作区解析是双实现，改一处必须改两处
+
+`bootstrap.ps1` 顶部的解析块和 `scripts/lib/paths.js` 的 `resolveWorkspace()` 必须同顺序、
+同兜底（参数 > 环境变量 > manifest.default > 内置 C:\DSH空间）。2026-11-19 审查前两边各写各的，
+同一台机器结论相反。回归锚点在 `tests/workspace-resolution.test.mjs`。
+
 ## 已知缺陷 / 没做的
+
+2026-11-19 两轮审查的严重项（puppeteer 死代码 / frida 等不装 / 工作区解析不一致 / MCP 三处 / CI 退出码泄漏）**都已修**，逐项处置见 `docs/` 下两份审查报告，回归锚点在 `tests/`。下表只记**仍然没做**的。
 
 | 项 | 状态 |
 |---|---|
@@ -179,7 +197,12 @@ PS 5.1 的 `-Encoding UTF8` 会写 BOM，wscript 报 `无效字符`。正确是 
 | 非管理员会话 | winget 机器级安装的提权提示**没实测** |
 | Windows 10 / ARM64 / 离线 | 未覆盖，文档里也没声明不支持 |
 | `G2` 修复源 | 只能从旧机拷。想让真·新机也能修，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
-| CI 实跑 | workflow 只在本地推演过，没在 GitHub Actions 上跑过 |
+| CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
+| verify / MCP 长耗时段无进度（M 段最长 240s） | **没做**（审查建议 #11）。要做得上流式逐段输出 |
+| `-DryRun` 计划预览 | **没做**（审查建议 #12） |
+| MCP `notifications/cancelled` / SIGTERM 优雅退出 | **没做**（审查建议 #13 剩余部分；`isError` 已补） |
+| 00 段与 H 段工作区口径有重叠 | **不合并**（审查建议 #14）。00 查「前置到位」、H 查「内容完整」，各有用途 |
+| winget -1978335212 降级为 ok | **不做**（审查建议 #15）。该分支只在「winget 说装了但命令解析不到」时走到——那是真缺口（多半是 PATH），降级成 ok 就是漏报。只把文案改准了 |
 
 ## 怎么确认你没改坏
 

@@ -351,12 +351,21 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
         $probe = if ($probeCmd) { Get-CmdVersion $probeCmd $probeArgs } else { $null }
         if ($probe) { Say "$label installed ($probe)" 'fix' }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
-        elseif ($rc -eq -1978335212) { Say "$label already installed (winget -1978335212)" 'warn' }
+        elseif ($rc -eq -1978335212) { Say "$label already installed per winget but not resolvable - check PATH" 'warn' }
         else {
             $why = if (-not $isAdmin) { ' (not elevated - may need an admin shell)' } else { '' }
             Say "$label install failed: winget rc=$rc$why" 'bad'
         }
     } catch { Say "$label install failed: $_" 'bad' }
+}
+
+function Install-Pip($pyExe, $pkg, $label) {
+    # $LASTEXITCODE survives across statements - if the call throws,
+    # it still holds the PREVIOUS command's code, so we would lie
+    # about installing successfully.
+    $global:LASTEXITCODE = -1
+    try { & $pyExe -m pip install $pkg --quiet 2>&1 | Out-Null } catch { }
+    if ($LASTEXITCODE -eq 0) { Say "installed $label" 'fix' } else { Say "$label install failed" 'warn' }
 }
 
 Write-Host ""
@@ -366,6 +375,45 @@ Write-Host ("host : " + [Environment]::OSVersion.VersionString)
 Write-Host ("pwsh : " + $PSVersionTable.PSVersion.ToString())
 Write-Host ("arch : " + $env:PROCESSOR_ARCHITECTURE)
 Write-Host ""
+
+# Workspace resolution: -Workspace param > DSH_WORKSPACE env > manifest.workspace.default
+# > built-in default. Same order AND same fallback as scripts/lib/paths.js
+# (resolveWorkspace). Keep the two in sync - a mismatch once made bootstrap and
+# verify disagree about the SAME machine (review severe #3).
+$wsPath = $Workspace
+if (-not $wsPath) { $wsPath = $env:DSH_WORKSPACE }
+$mfWs = Get-Manifest
+if (-not $wsPath -and $mfWs -and $mfWs.workspace -and $mfWs.workspace.default) { $wsPath = $mfWs.workspace.default }
+if (-not $wsPath) { $wsPath = 'C:\DSH' + [char]0x7A7A + [char]0x95F4 }
+$wsConfigured = [bool]($env:DSH_WORKSPACE -or ($mfWs -and $mfWs.workspace -and $mfWs.workspace.default))
+
+# DSH_HOME can be overridden: bare-metal simulation and a different user name both need it
+$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+
+# 0. manual prerequisites (phase 1 - human work). Printed FIRST so the red lines
+# below are not misread as "this script is broken": installing the host, copying
+# ~/.dsh and the workspace, filling credentials are human steps by design.
+# Mirrors the 00 segment of verify.mjs.
+Say '0. manual prerequisites (phase 1 - human, not this script)' 'head'
+$mfPre = Get-Manifest
+if ($mfPre -and $mfPre.prerequisites) {
+    $preState = @{
+        'dsh-host'    = [bool](Resolve-DshRoot)
+        'dsh-home'    = (Test-Path -LiteralPath (Join-Path $dshHome 'profiles\desktop\node_modules'))
+        'workspace'   = ((Test-Path -LiteralPath $wsPath) -and (Test-Path -LiteralPath (Join-Path $wsPath '.agents\skills')) -and (Test-Path -LiteralPath (Join-Path $wsPath 'knowledge\persona')))
+        'credentials' = (Test-Path -LiteralPath (Join-Path $dshHome '.credentials.yaml'))
+        'env'         = $wsConfigured
+    }
+    $preMissing = 0
+    foreach ($p in @($mfPre.prerequisites)) {
+        $st = $preState[[string]$p.id]
+        if ($null -eq $st) { Say ([string]$p.title + ' (unprobed)') 'info'; continue }
+        if ($st) { Say ([string]$p.title) 'ok'; continue }
+        if ($p.blocking) { $preMissing++; Say ([string]$p.title) 'bad' }
+        else { Say ([string]$p.title) 'info' }
+    }
+    if ($preMissing -gt 0) { Say "the items above are phase-1 human work - this script never does them" 'info' }
+} else { Say "manifest has no prerequisites list" 'info' }
 
 # ============ A. core runtimes ============
 Say 'A. core runtimes' 'head'
@@ -494,26 +542,34 @@ $chrome = $null
 foreach ($c in $chromeCands) { if (Test-Path $c) { $chrome = $c; break } }
 if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg (Get-WingetId 'chrome' 'Google.Chrome') 'Google Chrome' $true 'chrome' '' }
 
-# Workspace: -Workspace param > DSH_WORKSPACE env > manifest.workspace.default > built-in default
-$wsPath = $Workspace
-if (-not $wsPath) { $wsPath = $env:DSH_WORKSPACE }
-if (-not $wsPath) {
-    $mf = Get-Manifest
-    if ($mf -and $mf.workspace -and $mf.workspace.default) { $wsPath = $mf.workspace.default }
-}
-if (-not $wsPath) { $wsPath = 'C:\DSH' + [char]0x7A7A + [char]0x95F4 }
-$puppeteerDir = Join-Path $wsPath '_tools\browser\node_modules\puppeteer'
-if (Test-Path $puppeteerDir) { Say "puppeteer installed" 'ok' }
-else { Say "puppeteer missing (run npm i in _tools/browser)" 'warn' }
+# puppeteer is handled once, in section C (detect -> install -> re-probe)
 
 # ============ E. reverse engineering ============
 Say 'E. reverse engineering (optional)' 'head'
 $frida = Get-CmdVersion 'frida' '--version'
 if ($frida) { Say "frida $frida" 'ok' }
-else { Say "frida not found (wechat-history skill needs it)" 'warn' }
+else {
+    Say "frida not found (wechat-history skill needs it)" 'warn'
+    if ($Apply -and $python) {
+        $pyCmdE = Get-Command $pyName -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($pyCmdE) {
+            Install-Pip $pyCmdE.Source @('frida', 'frida-tools') 'frida+frida-tools'
+            $frida = Get-CmdVersion 'frida' '--version'
+            if ($frida) { Say "frida $frida" 'fix' } else { Say "frida installed but not resolvable - restart the shell" 'warn' }
+        }
+    }
+}
 
 # ============ F. python packages ============
 Say 'F. python packages' 'head'
+# Names are DISTRIBUTION names from manifest.pythonPackages (what pip list shows),
+# never import names: matching import names once made checks permanently red on a
+# fully installed machine (Cryptodome=pycryptodomex, pysilk=silk-python).
+$mfPkg = Get-Manifest
+$sysPkgs = @('pillow', 'pyyaml')
+if ($mfPkg -and $mfPkg.pythonPackages -and $mfPkg.pythonPackages.system) {
+    $sysPkgs = @($mfPkg.pythonPackages.system | ForEach-Object { [string]$_.name })
+}
 if ($python) {
     $pyCmd = Get-Command $pyName -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pyCmd) {
@@ -523,24 +579,43 @@ if ($python) {
         if (-not $pipText) {
             Say "pip list failed (pip not installed?)" 'warn'
         } else {
-            $needPkgs = @('pillow', 'pyyaml')
-            foreach ($pkg in $needPkgs) {
-                if ($pipText -match ('(?im)^' + $pkg + '\s')) { Say "python:$pkg" 'ok' }
+            foreach ($pkg in $sysPkgs) {
+                if ($pipText -match ('(?im)^' + [regex]::Escape($pkg) + '\s')) { Say "python:$pkg" 'ok' }
                 else {
                     Say "python:$pkg missing" 'warn'
-                    if ($Apply) {
-                        # $LASTEXITCODE survives across statements - if the call throws,
-                        # it still holds the PREVIOUS command's code, so we would lie
-                        # about installing successfully.
-                        $global:LASTEXITCODE = -1
-                        try { & $pyExe -m pip install $pkg --quiet 2>&1 | Out-Null } catch { }
-                        if ($LASTEXITCODE -eq 0) { Say "installed $pkg" 'fix' } else { Say "$pkg install failed" 'warn' }
-                    }
+                    if ($Apply) { Install-Pip $pyExe $pkg "python:$pkg" }
                 }
             }
         }
     }
 }
+
+# DSH bundled python is a SECOND interpreter with its own packages - keep the
+# candidate list in sync with scripts/checks/f-python-packages.js.
+$dshPy = $null
+$dshPyCands = @()
+$rootForPy = Resolve-DshRoot
+if ($rootForPy) { $dshPyCands += (Join-Path $rootForPy 'resources\runtime\primary-runtime\dependencies\python\python.exe') }
+$dshPyCands += (Join-Path $dshHome 'dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe')
+foreach ($c in $dshPyCands) { if (Test-Path -LiteralPath $c) { $dshPy = $c; break } }
+if ($dshPy) {
+    $corePkgs = @('numpy', 'pandas', 'openpyxl', 'pillow', 'lxml')
+    if ($mfPkg -and $mfPkg.pythonPackages -and $mfPkg.pythonPackages.dshBundled) {
+        $corePkgs = @($mfPkg.pythonPackages.dshBundled | ForEach-Object { [string]$_.name })
+    }
+    $dshPipText = ''
+    try { $dshPipText = (& $dshPy -m pip list 2>&1 | Out-String) } catch { $dshPipText = '' }
+    if (-not $dshPipText) { Say "DSH python pip list failed" 'warn' }
+    else {
+        foreach ($pkg in $corePkgs) {
+            if ($dshPipText -match ('(?im)^' + [regex]::Escape($pkg) + '\s')) { Say "dsh-python:$pkg" 'ok' }
+            else {
+                Say "dsh-python:$pkg missing" 'warn'
+                if ($Apply) { Install-Pip $dshPy $pkg "dsh-python:$pkg" }
+            }
+        }
+    }
+} else { Say "DSH bundled python not found (dsh-runtimes incomplete)" 'warn' }
 
 # ============ G. DSH host ============
 Say 'G. DSH host' 'head'
@@ -561,8 +636,7 @@ if (Test-Path $appDir) {
     }
 } else { Say "unpacked tree missing" 'warn' }
 
-# DSH_HOME can be overridden: bare-metal simulation and a different user name both need it
-$dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+# $dshHome is resolved once at the top (used by section 0 and F)
 if (Test-Path $dshHome) { Say ".dsh: $dshHome" 'ok' } else { Say ".dsh missing" 'bad' }
 
 $profPkg = Join-Path $dshHome 'profiles\desktop\package.json'

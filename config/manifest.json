@@ -368,22 +368,41 @@
       {
         "name": "frida",
         "consumer": "wechat-history",
-        "degradedBehavior": "微信取证不可用"
+        "degradedBehavior": "微信取证不可用",
+        "optional": true
       },
       {
         "name": "frida-tools",
         "consumer": "wechat-history",
-        "degradedBehavior": "微信取证不可用"
-      },
-      {
-        "name": "pymem",
-        "consumer": "wechat-history",
-        "degradedBehavior": "微信取证不可用"
+        "degradedBehavior": "微信取证不可用",
+        "optional": true
       },
       {
         "name": "pycryptodome",
         "consumer": "wechat-history",
-        "degradedBehavior": "微信取证不可用"
+        "degradedBehavior": "微信取证不可用",
+        "importName": "Crypto",
+        "optional": true
+      },
+      {
+        "name": "pycryptodomex",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用",
+        "importName": "Cryptodome",
+        "optional": true
+      },
+      {
+        "name": "zstandard",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用",
+        "optional": true
+      },
+      {
+        "name": "silk-python",
+        "consumer": "wechat-history",
+        "degradedBehavior": "微信取证不可用",
+        "importName": "pysilk",
+        "optional": true
       }
     ],
     "dshBundled": [
@@ -457,7 +476,7 @@
     },
     {
       "id": "env",
-      "title": "设 DSH_WORKSPACE（可选）",
+      "title": "设 DSH_WORKSPACE",
       "how": "\"[Environment]::SetEnvironmentVariable('DSH_WORKSPACE','D:\\你的工作区','User')\"",
       "blocking": false,
       "why": "工作区不在默认路径时才需要"

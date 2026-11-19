@@ -42,8 +42,8 @@ PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报
 - **不填 `.credentials.yaml`**。缺文件时写一份**只有注释、没有任何值**的模板，key 得自己填。
 - **G2 修不了没有源的东西**。手工包要从宿主 `node_modules` 拷，本地插件要从 `~/.dsh/plugins` 拷；
   源不在就只报红。win-bash payload 只给指引，soul schema 只读不动数据。
-- **大部分缺项只报告**：ffprobe、ImageMagick、frida、puppeteer、wechat 的 pip 包、
-  DSH 自带 python 的包、N/O/P 三段。想装得自己装。
+- **有些缺项只报告**：N/O/P 三段、PATH 重复项、curl.exe / winget 本体、
+  拿不到源的 G2 修复件。其余缺项 `-Apply` 会自动装（见下面「十八类检查」表）。
 - **PATH 只补不删**。重复项只报告，去重手工。
 - **不动宿主数据**（`~/.dsh/storages`、`~/.dsh/sessions`）。
 - **不改系统代理**。只给目标程序挂单独的代理启动器。
@@ -90,10 +90,10 @@ node scripts/verify.mjs
 |---|---|---|
 | A 核心运行时 | Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm | winget 装 Node、Python、Git；pnpm 先认 DSH 自带那份，没有才 `npm i -g`；curl.exe / winget 只提示 |
 | B 归档工具 | 7-Zip + 是否在 PATH（User 和 Machine 都查） | winget 装；装了但不在 PATH 就追加（先备份，备份失败不动） |
-| C 媒体工具 | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp 走 winget；**ffprobe、ImageMagick 只检查不装** |
-| D 浏览器自动化 | Chrome / puppeteer | Chrome 走 winget；**puppeteer 只提示**，自己去 `_tools/browser` 里 `npm i` |
-| E 逆向工具（可选） | frida | **只提示，不装** |
-| F Python 包 | 系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包 | pillow / pyyaml 走 pip 装；wechat 那 4 个、DSH 自带 python 的 5 个只检查 |
+| C 媒体工具 | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp、ImageMagick 走 winget；ffprobe 随 ffmpeg 装，缺了提示重装 Gyan.FFmpeg |
+| D 浏览器自动化 | Chrome / puppeteer | Chrome 走 winget；puppeteer 在 `_tools\browser` 里自动 `npm i`（工作区没这目录才只提示） |
+| E 逆向工具（可选） | frida | 缺了走 pip 装 frida + frida-tools，装完复测 |
+| F Python 包 | 系统包 + wechat 取证包 + DSH 自带 python 核心包（清单来自 `manifest.pythonPackages`） | 全部缺了就走 pip 装（两套解释器分开装） |
 | G DSH 本体 | 宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容 / CLI shim | **只检查**——官方安装器的事 |
 | G2 插件加载前置 | junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1 | **会修**（`-RepairG2`，`-Apply` 隐含）：拷 5 个手工包（`dsh-compaction-basic` 建 junction）、拷 4 个本地插件、缺凭据写注释模板；win-bash payload、soul schema、宿主缺失只提示 |
 | H 工作区 | 七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码 | 缺目录 `-Apply` 自动建；人格、技能库只检查 |
@@ -108,8 +108,10 @@ node scripts/verify.mjs
 
 ## 哪些是真装
 
-`bootstrap.ps1 -Apply` 真会装的只有：Node、Python、Git（可选）、pnpm（`npm -g`）、7-Zip（+PATH）、
-ffmpeg、yt-dlp、Chrome、pillow、pyyaml。
+`bootstrap.ps1 -Apply` 真会装的有：Node、Python、Git（可选）、pnpm（`npm -g`）、7-Zip（+PATH）、
+ffmpeg、yt-dlp、ImageMagick、Chrome、rg、jq、exiftool、dotnet（winget）；puppeteer（工作区里 `npm i`）；
+pip 包两套解释器分开补（系统 python 的 pillow/pyyaml/frida/frida-tools/wechat 取证包，
+DSH 自带 python 的 numpy/pandas/openpyxl/pillow/lxml，清单以 `manifest.pythonPackages` 为准）。
 
 单点自动改的只有：PATH 缺项追加（先备份）、执行策略 Restricted/AllSigned → CurrentUser RemoteSigned、
 `-WithProxy` 写启动器 + Run 键、`-WithScheduledTasks` 注册计划任务，

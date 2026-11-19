@@ -14,6 +14,7 @@
  *   tool_resolve   给工具名返回绝对路径 + 版本 + 是否在 PATH
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,13 +75,20 @@ const TOOLS = [
   },
 ];
 
-function text(s) { return { content: [{ type: 'text', text: typeof s === 'string' ? s : JSON.stringify(s, null, 2) }] }; }
+// isError 让 agent 按 MCP 规范把坏参数当失败调用，而不是成功返回了一个 error 对象（审查一般 #6）。
+function text(s, isError) {
+  const r = { content: [{ type: 'text', text: typeof s === 'string' ? s : JSON.stringify(s, null, 2) }] };
+  if (isError) r.isError = true;
+  return r;
+}
 
 async function callTool(name, args) {
   const mf = await getManifest();
   if (name === 'env_status') {
     const only = args && args.only ? String(args.only) : '';
-    return text(runVerify(only || undefined));
+    if (only && !/^[A-Za-z0-9,]+$/.test(only)) return text({ error: 'only 只能是段 id，逗号分隔（如 A,G2,00）' }, true);
+    const out = runVerify(only || undefined);
+    return text(out, Boolean(out && out.error));
   }
   if (name === 'tool_discover') {
     const cap = (args && args.capability) ? String(args.capability).toLowerCase() : '';
@@ -98,32 +106,49 @@ async function callTool(name, args) {
   }
   if (name === 'tool_resolve') {
     const n = String((args && args.name) || '').trim();
-    if (!n) return text({ error: 'name 必填' });
+    if (!n) return text({ error: 'name 必填' }, true);
+    // 注入面收口：name 会进 cmd /c。字符白名单 + 只执行 where / manifest pathDirs
+    // 解析出的路径，绝不执行原始输入（审查一般 #5）。
+    if (!/^[A-Za-z0-9._-]+$/.test(n)) return text({ error: 'name 含非法字符（只允许字母数字 . _ -）' }, true);
     const tool = ((mf && mf.tools) || []).find((t) => t.name === n);
     const probeCmd = (tool && (tool.probeCmd || tool.name)) || n;
-    const probeArgs = (tool && (tool.probeArgs || tool.versionArgs)) || ['--version'];
+    const probeArgs = (tool && (tool.probeArgs !== undefined ? tool.probeArgs : tool.versionArgs)) || ['--version'];
     // 不用 shell+args（DEP0190：参数不转义）。where 是 exe，直接调。
     const r = spawnSync('where', [probeCmd], { encoding: 'utf8', timeout: 15000 });
-    const path = (r.stdout || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null;
+    const inPathPath = (r.stdout || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null;
+    // 「装了但不在 PATH」是本工具存在的头号理由：where 没命中就回退查 manifest 的
+    // pathDirs（7-Zip 经典坑），否则已安装会被误报成未安装（审查一般 #4）。
+    let found = inPathPath;
+    let installedNotInPath = false;
+    if (!found && tool && Array.isArray(tool.pathDirs)) {
+      const exeName = tool.exeName || (probeCmd + '.exe');
+      for (const d of tool.pathDirs) {
+        const cand = join(d, exeName);
+        try { if (existsSync(cand)) { found = cand; installedNotInPath = true; break; } } catch { /* keep probing */ }
+      }
+    }
     let version = null;
-    if (path) {
-      // 走 cmd /c 是为了让 .cmd 也能跑（node 直接 spawn 不了批处理）
-      const v = spawnSync('cmd', ['/c', probeCmd, ...probeArgs], { encoding: 'utf8', timeout: 15000 });
+    // versionArgs: [] 表示没有安全的版本探针（7z 把帮助首行当版本）——跳过（建议 #10）。
+    if (found && Array.isArray(probeArgs) && probeArgs.length > 0) {
+      // 走 cmd /c 是为了让 .cmd 也能跑（node 直接 spawn 不了批处理）。执行的是
+      // where / pathDirs 解析出的绝对路径，不是用户输入。
+      const v = spawnSync('cmd', ['/c', found, ...probeArgs], { encoding: 'utf8', timeout: 15000 });
       version = ((v.stdout || '') + (v.stderr || '')).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null;
     }
     return text({
       name: n,
-      resolved: Boolean(path),
-      path,
+      resolved: Boolean(found),
+      inPath: Boolean(inPathPath),
+      installedNotInPath,
+      path: found,
       version,
-      inPath: Boolean(path),
       capability: tool ? tool.capability : null,
       consumer: tool ? tool.consumer : null,
       degradedBehavior: tool ? tool.degradedBehavior : null,
       installHint: tool ? (tool.winget || (tool.pip && ('pip install ' + tool.pip)) || (tool.npm && ('npm i ' + tool.npm)) || null) : null,
     });
   }
-  return text({ error: 'unknown tool: ' + name });
+  return text({ error: 'unknown tool: ' + name }, true);
 }
 
 // ---------- JSON-RPC over stdio ----------

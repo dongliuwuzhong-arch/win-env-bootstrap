@@ -54,10 +54,10 @@ node <技能目录>/scripts/verify.mjs
 |---|---|---|---|
 | A | **核心运行时** | Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm | winget 装 Node、Python、Git；pnpm 先认 DSH 自带那份，没有才 `npm i -g`；**curl.exe / winget 只提示** |
 | B | **归档工具** | 7-Zip + 是否在 PATH（User 和 Machine 都查） | winget 装；装了但不在 PATH 就追加（改前备份到 `~/.dsh`，备份失败则不动） |
-| C | **媒体工具** | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp 走 winget；**ffprobe、ImageMagick 只检查不装**（`convert` 会撞系统磁盘工具） |
-| D | **浏览器自动化** | Chrome / puppeteer | Chrome 走 winget；**puppeteer 只提示**，自己去 `_tools/browser` 里 `npm i` |
-| E | **逆向工具（可选）** | frida | **只提示，不装** |
-| F | **Python 包** | 系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包 | pillow / pyyaml 走 pip 装；**wechat 那 4 个、DSH 自带 python 的 5 个只检查** |
+| C | **媒体工具** | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp、ImageMagick 走 winget（用 `magick` 调，`convert` 会撞系统磁盘工具）；ffprobe 随 ffmpeg 装 |
+| D | **浏览器自动化** | Chrome / puppeteer | Chrome 走 winget；puppeteer 在 `_tools\browser` 里自动 `npm i`（工作区没这目录才只提示） |
+| E | **逆向工具（可选）** | frida | 缺了走 pip 装 frida + frida-tools，装完复测 |
+| F | **Python 包** | 系统包 + wechat 取证包 + DSH 自带 python 核心包（清单来自 `manifest.pythonPackages`） | 全部缺了就走 pip 装（两套解释器分开装） |
 | G | **DSH 本体** | 宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容 / CLI shim 在不在 PATH | **只检查**——官方安装器的事 |
 | G2 | **插件加载前置** | junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1 | **会修**（`-RepairG2`，`-Apply` 隐含）：从宿主拷 5 个手工包（`dsh-compaction-basic` 建 junction）、从 `~/.dsh/plugins` 拷 4 个本地插件、缺凭据时写注释模板；**win-bash payload、soul schema、宿主缺失只提示** |
 | H | **工作区** | 七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码 | 缺目录 `-Apply` 自动建；人格、技能库只检查 |
@@ -75,8 +75,10 @@ node <技能目录>/scripts/verify.mjs
 `bootstrap.ps1 -Apply` 真会装的，就这些：
 
 ```
-Node · Python · Git（可选）· pnpm（npm -g）· 7-Zip（+PATH）· ffmpeg · yt-dlp · Chrome
-pillow · pyyaml
+Node · Python · Git（可选）· pnpm（npm -g）· 7-Zip（+PATH）· ffmpeg · yt-dlp · ImageMagick · Chrome
+rg · jq · exiftool · dotnet（winget）· puppeteer（工作区里 npm i）
+pip（系统 python）：pillow · pyyaml · frida · frida-tools · wechat 取证包
+pip（DSH 自带 python）：numpy · pandas · openpyxl · pillow · lxml
 G2 修复（-RepairG2 / -Apply）：dsh-compaction-basic junction · 4 个手工包拷贝
                                   · 4 个本地插件拷贝 · .credentials.yaml 注释模板
 ```
@@ -143,8 +145,8 @@ TTS 外网 WSS 不通、bridge-next 的 uv/15 个 pip 包缺。
 | 7-Zip 26.03 | ⚠️ 装了但不在 PATH | 已补（`Add-PathEntry`） |
 | ffmpeg / ffprobe | ✅ | — |
 | yt-dlp | ❌ 原本没有 | 已 pip 装 |
-| frida | ❌ 原本没有 | 手工装 17.27.0；**脚本不装** |
-| ImageMagick | ❌ 没有，且 `convert` 撞系统磁盘工具 | **未装；脚本只查不装** |
+| frida | ❌ 原本没有 | 手工装 17.27.0；脚本现在可 pip 自动装（frida + frida-tools） |
+| ImageMagick | ❌ 没有，且 `convert` 撞系统磁盘工具 | 未装；脚本现在可 winget 自动装（用 `magick` 调） |
 | `which` `df` `du` `od` `sha256sum` `stat` `wget` `rg` `jq` | ❌ MSYS bash 没有 | 不装，用替代命令 |
 | PATH 重复项 | ⚠️ DSH cli bin 出现两次 | **只报告，不修**，去重手工 |
 | 控制台代码页 | 936（GBK） | 不影响功能，脚本零非 ASCII |

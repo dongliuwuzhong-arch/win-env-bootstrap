@@ -23,7 +23,9 @@ export async function check(ctx) {
     'dsh-home': ctx.exists(profileNM),
     'workspace': Boolean(ctx.WS) && ctx.exists(ctx.WS) && ctx.exists(skillsDir) && ctx.exists(personaDir),
     'credentials': ctx.exists(cred),
-    'env': Boolean(process.env.DSH_WORKSPACE),
+    // 「设 DSH_WORKSPACE」的本意是「工作区路径不用猜」。环境变量或 manifest.default
+    // 任一显式配置都算达成；内置兜底不算（那正是没配置的样子）。
+    'env': Boolean(process.env.DSH_WORKSPACE) || Boolean(ctx.manifest && ctx.manifest.workspace && ctx.manifest.workspace.default),
   };
 
   let blockingMissing = 0;

@@ -13,8 +13,10 @@ const LIB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST_PATH = path.join(LIB_DIR, '..', '..', 'config', 'manifest.json');
 
 // manifest 读不到时按这份兜底（技能目录被单独拷走也不会炸）
+// workspace 兜底值和 bootstrap.ps1 的内置默认是同一个（C:\DSH空间）：两边不一致时
+// 同一台机器会得出相反结论（审查严重 #3）。改一处必须改两处。
 const FALLBACK = {
-  workspace: { default: '' },
+  workspace: { default: 'C:\\DSH空间' },
   dsh: { rootCandidates: ['C:\\Software\\DSH', 'C:\\Program Files\\DSH'] },
   categories: [
     { id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }, { id: 'F' },
@@ -47,15 +49,20 @@ export function resolveDshRoot(candidates) {
   return null;
 }
 
+// 工作区解析顺序：参数 > DSH_WORKSPACE 环境变量 > manifest.workspace.default > 内置兜底。
+// bootstrap.ps1 里是同一顺序、同一兜底值——两处实现必须保持一致（审查严重 #3）。
+export function resolveWorkspace({ param, env, manifestDefault } = {}) {
+  return param || env || manifestDefault || FALLBACK.workspace.default || '';
+}
+
 export function createContext() {
   const manifest = loadManifest();
   const HOME = os.homedir();
-  // 工作区路径：manifest.default > DSH_WORKSPACE 环境变量 > 内置回退
-  // 公开库里 manifest.default 留空，由使用者用环境变量指定，避免把作者自己的路径写进仓库
-  const WS = (manifest.workspace && manifest.workspace.default)
-    || process.env.DSH_WORKSPACE
-    || FALLBACK.workspace.default
-    || '';
+  // 公开库里 manifest.workspace.default 留空，由使用者用环境变量指定，避免把作者自己的路径写进仓库
+  const WS = resolveWorkspace({
+    env: process.env.DSH_WORKSPACE,
+    manifestDefault: manifest.workspace && manifest.workspace.default,
+  });
   // DSH_HOME 可被环境变量覆盖：裸机模拟测试和换用户名都需要它，不能写死 homedir
   const DSH_HOME = process.env.DSH_HOME || path.join(HOME, '.dsh');
 

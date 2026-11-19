@@ -80,6 +80,10 @@ jobs:
 
       # 只读：-Check 不装任何东西。
       # 0 = 无缺口 / 1 = 有硬缺口（CI 机器没装 DSH 本体，属正常）/ 其它 = 脚本自己崩了。
+      #
+      # 每步末尾必须显式 exit：GH 的 pwsh/powershell 包装器会在步骤末尾追加
+      # exit $LASTEXITCODE，不封尾就会把 bootstrap 的合法退出码 1 漏给步骤，
+      # 断言明明通过也判红（2026-11-19 的 12 连红就是这个）。
       - name: bootstrap -Check（只读，断言退出码）
         run: |
           Set-Location $env:SKILL_ROOT
@@ -91,9 +95,16 @@ jobs:
             Write-Host "::error::bootstrap -Check 退出码 $code，不在 0/1/2 里（脚本自己崩了）"
             exit 1
           }
+          exit 0
 
       # 本地一键冒烟也在 CI 里跑一遍：保证这条入口不是只在作者机器上能跑。
       - name: smoke.ps1（一键冒烟）
         run: |
           Set-Location $env:SKILL_ROOT
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Host "::error::smoke.ps1 退出码 $code"
+            exit 1
+          }
+          exit 0
