@@ -40,5 +40,15 @@ export async function check(ctx) {
   if (pnpmV) out.push(ok('pnpm ' + pnpmV + '（系统）'));
   else if (bundledPnpm) out.push(ok('pnpm 由 DSH 自带（' + bundledPnpm + '）'));
   else out.push(bad('pnpm 既不在 PATH 也不在 DSH 运行时里'));
+  // agent-cli: the commands an agent reaches for first.
+  // bootstrap installs them; without a check here nothing verifies they landed.
+  for (const [cmd, args, why] of [
+    ['rg', ['--version'], 'agent 文本搜索（最高频）'],
+    ['jq', ['--version'], 'JSON 处理'],
+  ]) {
+    const v = ctx.run(cmd, args);
+    if (v) out.push(ok(cmd + ' ' + v.split('\n')[0].trim()));
+    else out.push(warn(cmd + ' 未装（' + why + '）', 'bootstrap -Apply 装，或 winget install ' + (cmd === 'rg' ? 'BurntSushi.ripgrep.MSVC' : 'jqlang.jq')));
+  }
   return out;
 }

@@ -1,6 +1,10 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { ok, warn } from '../lib/report.js';
+import { ok, warn, info } from '../lib/report.js';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SCRIPTS_DIR = path.dirname(HERE);
 
 export const id = 'L';
 export const title = '工作区脚本可跑性';
@@ -26,5 +30,22 @@ export async function check(ctx) {
       out.push(warn(label + '（' + file + '）退出码 ' + e.status + '：' + txt.slice(0, 100)));
     }
   }
+  // MCP server: 光有文件不算数，得起得来、认得出 initialize 协议。
+  // agent 靠它发现工具，坏了就是静默降级成「只能自己 which」。
+  const mcpServer = path.join(SCRIPTS_DIR, 'mcp', 'server.mjs');
+  if (!ctx.exists(mcpServer)) {
+    out.push(info('MCP server 不存在（scripts/mcp/server.mjs）—— agent 发现不了工具，只能自己探测'));
+  } else {
+    try {
+      const probe = ctx.runNode(
+        ['-e', "const{spawnSync}=require('child_process');const r=spawnSync(process.execPath,['" + mcpServer.replace(/\\/g, '/') + "'],{input:'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\\n',encoding:'utf8',timeout:15000});if(!r.stdout||!r.stdout.includes('protocolVersion')){process.exit(1)}"],
+        { timeout: 20000 }
+      );
+      out.push(ok('MCP server 响应 initialize（3 个只读工具：env_status / tool_discover / tool_resolve）'));
+    } catch (e) {
+      out.push(warn('MCP server 存在但响应不了 initialize: ' + String(e.message || e).slice(0, 80)));
+    }
+  }
+
   return out;
 }
