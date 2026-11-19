@@ -47,19 +47,22 @@ export async function check(ctx) {
   for (const wrap of ['pyb.cmd', 'pys.cmd']) {
     const wp = join(WS, '_tools', wrap);
     if (!ctx.exists(wp)) { out.push(warn('_tools/' + wrap + ' 不存在')); continue; }
-    try {
-      const txt = fs.readFileSync(wp, 'utf8');
-      const m = txt.match(/"([A-Za-z]:\\Users\\[^\\"]+)/i);
-      if (m) {
-        const hardUser = m[1];
-        // 用 HOME 全路径比对，不假定 C:\Users（用户目录在别的盘时会误判，审计 P3-6）
-        if (!ctx.HOME.toLowerCase().startsWith(hardUser.toLowerCase())) {
-          out.push(bad(wrap + ' 写死了 ' + hardUser + '，当前用户是 ' + curUser + ' —— 会静默断'));
-        } else {
-          out.push(ok(wrap + ' 路径指向当前用户'));
-        }
-      } else out.push(ok(wrap + ' 没写死用户路径'));
-    } catch { out.push(warn(wrap + ' 读不了')); }
+    // 读文件单独 try；判定放外面——消息拼接出错不许吞掉整个检测（审计 N1 的教训）
+    let txt = null;
+    try { txt = fs.readFileSync(wp, 'utf8'); } catch { out.push(warn(wrap + ' 读不了')); continue; }
+    const m = txt.match(/"([A-Za-z]:\\Users\\[^\\"]+)/i);
+    if (m) {
+      const hardUser = m[1];
+      // 全等或后跟路径分隔符：Tom 不许命中 Tommy（审计 N5）
+      const home = ctx.HOME.toLowerCase();
+      const hard = hardUser.toLowerCase();
+      const hit = home === hard || home.startsWith(hard + '\\');
+      if (!hit) {
+        out.push(bad(wrap + ' 写死了 ' + hardUser + '，当前用户是 ' + ctx.HOME + ' —— 会静默断'));
+      } else {
+        out.push(ok(wrap + ' 路径指向当前用户'));
+      }
+    } else out.push(ok(wrap + ' 没写死用户路径'));
   }
   return out;
 }

@@ -1,5 +1,17 @@
+import fs from 'node:fs';
 import { join } from 'node:path';
 import { ok, warn, bad, info } from '../lib/report.js';
+
+// 「填 .credentials.yaml」判的是值到位：注释模板里就写着 key 名，
+// 只查文件存在会被模板假绿（审计 N8——两道防线不许同时空）。
+function credFilled(credPath, ctx) {
+  try {
+    const txt = fs.readFileSync(credPath, 'utf8');
+    const keys = (ctx.manifest && ctx.manifest.credentials && ctx.manifest.credentials.requiredKeys && ctx.manifest.credentials.requiredKeys.length)
+      ? ctx.manifest.credentials.requiredKeys : ['OPENCODE_GO_API_KEY'];
+    return keys.some((k) => new RegExp('^\\s*' + k + '\\s*:\\s*\\S', 'm').test(txt));
+  } catch { return false; }
+}
 
 export const id = '00';
 export const title = '人工前置（阶段一）';
@@ -22,7 +34,7 @@ export async function check(ctx) {
     'dsh-host': Boolean(DSH_ROOT && ctx.exists(DSH_ROOT)),
     'dsh-home': ctx.exists(profileNM),
     'workspace': Boolean(ctx.WS) && ctx.exists(ctx.WS) && ctx.exists(skillsDir) && ctx.exists(personaDir),
-    'credentials': ctx.exists(cred),
+    'credentials': credFilled(cred, ctx),
     // 「设 DSH_WORKSPACE」的本意是「工作区路径不用猜」。环境变量或 manifest.default
     // 任一显式配置都算达成；内置兜底不算（那正是没配置的样子）。
     'env': Boolean(process.env.DSH_WORKSPACE) || Boolean(ctx.manifest && ctx.manifest.workspace && ctx.manifest.workspace.default),

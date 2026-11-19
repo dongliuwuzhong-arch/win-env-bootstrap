@@ -195,7 +195,8 @@ export async function check(ctx) {
       const reqKeys = (ctx.manifest && ctx.manifest.credentials && ctx.manifest.credentials.requiredKeys && ctx.manifest.credentials.requiredKeys.length)
         ? ctx.manifest.credentials.requiredKeys : ['OPENCODE_GO_API_KEY'];
       const txt = fs.readFileSync(credPath, 'utf8');
-      const missing = reqKeys.filter((k) => !txt.includes(k));
+      // 判「非注释行 + 值非空」：注释模板里就写着 key 名，includes 会被模板假绿（审计 N8）
+      const missing = reqKeys.filter((k) => !new RegExp('^\\s*' + k + '\\s*:\\s*\\S', 'm').test(txt));
       if (missing.length === 0) out.push(ok('凭据含必需 key: ' + reqKeys.join(', ')));
       else out.push(bad('凭据里缺 key: ' + missing.join(', ') + ' —— 默认模型通道起不来（文件在≠key在）'));
     } catch { out.push(warn('凭据文件读不了')); }

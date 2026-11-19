@@ -70,6 +70,11 @@ if (onlyRaw.length && !only.length) {
   console.error('--only 需要至少一个段 id（如 --only=A,G2）');
   process.exit(64);
 }
+// 仅支持 Windows：别的平台不是「一片红」的问题，是根本不该跑（审计 R-2）
+if (process.platform !== 'win32') {
+  console.error('dsh-env-bootstrap 仅支持 Windows（当前平台: ' + process.platform + '）');
+  process.exit(64);
+}
 
 // 顺序由 config/manifest.json 的 categories 决定；manifest 里没有的段兜底追加到末尾
 const manifestOrder = ((ctx.manifest.categories || []).map((c) => String(c.id)));
@@ -88,6 +93,7 @@ say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
 // 按 manifest 顺序流式刷出：某段完成且它之前的段都已刷出时立刻打印——
 // M 段 240s 不再让整个屏幕静默（审计 P1-1）。--jsonl 串行跑，逐段吐进度行。
 const results = [];
+const t0 = new Array(todo.length);
 function render(i, st) {
   const mod = todo[i];
   let res;
@@ -108,7 +114,7 @@ function render(i, st) {
     }) + '\n');
   } else {
     say('');
-    say('--- ' + mod.id + '. ' + mod.title + ' ---');
+    say('--- ' + mod.id + '. ' + mod.title + '（' + Math.round((Date.now() - t0[i]) / 1000) + 's）---');
     for (const r of res) say(line(r));
   }
   results.push(...stamp(mod.id, res));
@@ -116,6 +122,7 @@ function render(i, st) {
 
 if (jsonl) {
   for (let i = 0; i < todo.length; i++) {
+    t0[i] = Date.now();
     const st = await todo[i].check(ctx).then((v) => ({ status: 'fulfilled', value: v }), (e) => ({ status: 'rejected', reason: e }));
     render(i, st);
   }
@@ -123,7 +130,6 @@ if (jsonl) {
   const slots = new Array(todo.length).fill(undefined);
   const announced = new Array(todo.length).fill(false);
   let next = 0;
-  const started = Date.now();
   const flush = () => {
     while (next < todo.length && slots[next] !== undefined) {
       render(next, slots[next]);
@@ -137,11 +143,13 @@ if (jsonl) {
       say('... 等待 ' + w.id + '. ' + w.title + '（长耗时段，最长约 240s）');
     }
   };
-  await Promise.all(todo.map((m, i) => m.check(ctx).then(
-    (v) => { slots[i] = { status: 'fulfilled', value: v }; flush(); },
-    (e) => { slots[i] = { status: 'rejected', reason: e }; flush(); }
-  )));
-  void started;
+  await Promise.all(todo.map((m, i) => {
+    t0[i] = Date.now();
+    return m.check(ctx).then(
+      (v) => { slots[i] = { status: 'fulfilled', value: v }; flush(); },
+      (e) => { slots[i] = { status: 'rejected', reason: e }; flush(); }
+    );
+  }));
 }
 
 const c = counts(results);

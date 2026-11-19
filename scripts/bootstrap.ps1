@@ -104,12 +104,19 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
                 else {
                     # Mismatch repair (audit P2-6): keep the old copy as .bak-timestamp,
                     # replace with a junction so host upgrades keep following.
+                    # If junction creation fails the rename MUST roll back - a vanished
+                    # package is worse than a stale copy (audit N2).
                     $bak = $dst + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
                     try {
                         Rename-Item -LiteralPath $dst -NewName (Split-Path -Leaf $bak) -ErrorAction Stop
-                        New-Item -ItemType Junction -Path $dst -Target $src -ErrorAction Stop | Out-Null
-                        Say "  relinked $pkg -> $src (old copy kept at $bak)" 'fix'
-                    } catch { Say "  relink $pkg failed: $_" 'bad' }
+                        try {
+                            New-Item -ItemType Junction -Path $dst -Target $src -ErrorAction Stop | Out-Null
+                            Say "  relinked $pkg -> $src (old copy kept at $bak)" 'fix'
+                        } catch {
+                            if (Test-Path -LiteralPath $bak) { Rename-Item -LiteralPath $bak -NewName (Split-Path -Leaf $dst) -ErrorAction SilentlyContinue }
+                            Say "  relink $pkg failed, rolled back to plain copy: $_" 'bad'
+                        }
+                    } catch { Say "  relink $pkg failed (rename): $_" 'bad' }
                 }
             } else { Say "  $pkg present, skip" 'ok' }
             continue
@@ -373,6 +380,27 @@ function Get-WingetId($toolName, $fallback) {
     return $fallback
 }
 
+function Install-PathFix($tEntry, $probeCmd, $probeArgs) {
+    # Installed but not on PATH is the classic trap: try manifest pathDirs, add the
+    # FIRST dir that actually contains the exe, and refresh the CURRENT process PATH
+    # too - registry writes alone never make the re-probe see it (audit N3).
+    # Returns the probe string or $null.
+    if (-not $tEntry -or -not $tEntry.pathDirs) { return $null }
+    $cands = @()
+    if ($tEntry.exeName) { $cands += [string]$tEntry.exeName }
+    $cands += ($probeCmd + '.exe')
+    $cands += $probeCmd
+    foreach ($d in @($tEntry.pathDirs)) {
+        $found = $false
+        foreach ($e2 in $cands) { if (Test-Path -LiteralPath (Join-Path $d $e2)) { $found = $true; break } }
+        if (-not $found) { continue }
+        Add-PathEntry $d | Out-Null
+        $env:Path = $env:Path + ';' + $d
+        return Get-CmdVersion $probeCmd $probeArgs
+    }
+    return $null
+}
+
 function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
     if (-not $Apply) {
         # Optional tools must NOT count as hard gaps - otherwise -Check exit 1
@@ -402,21 +430,18 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
         $probe = if ($probeCmd) { Get-CmdVersion $probeCmd $probeArgs } else { $null }
         # Installed but not on PATH is the classic trap - try manifest pathDirs
         # before giving up (generic version of the 7-Zip special case, audit P2-1).
+        $viaPathFix = $false
         if (-not $probe -and $probeCmd) {
             $mfT = Get-Manifest
             $tEntry = $null
             if ($mfT -and $mfT.tools) { $tEntry = @($mfT.tools | Where-Object { $_.name -eq $probeCmd -or $_.probeCmd -eq $probeCmd }) | Select-Object -First 1 }
-            if ($tEntry -and $tEntry.pathDirs) {
-                foreach ($d in @($tEntry.pathDirs)) {
-                    if (Test-Path -LiteralPath $d) {
-                        Add-PathEntry $d | Out-Null
-                        $probe = Get-CmdVersion $probeCmd $probeArgs
-                        if ($probe) { break }
-                    }
-                }
-            }
+            $probe = Install-PathFix $tEntry $probeCmd $probeArgs
+            if ($probe) { $viaPathFix = $true }
         }
-        if ($probe) { Say "$label installed ($probe)" 'fix' }
+        if ($probe) {
+            if ($viaPathFix) { Say "$label installed and now on PATH via pathDirs ($probe)" 'fix' }
+            else { Say "$label installed ($probe)" 'fix' }
+        }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
         elseif ($rc -eq -1978335212) { Say "$label already installed per winget but not resolvable - check PATH" 'warn' }
         else {

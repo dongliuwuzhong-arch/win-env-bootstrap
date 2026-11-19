@@ -36,6 +36,16 @@ test('g2/h 段消费 manifest 清单，不许另起炉灶（审计 P1-2 回归�
   assert.ok(!a.includes("ctx.HOME, '.dsh'"), 'a 段 pnpm 候选又写死 HOME/.dsh 了');
 });
 
+test('p 段 persona 清单走 manifest；凭据判定是「值非空」不是 includes（审计 N7/N8 回归）', () => {
+  const p = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', 'p-integrity-migration.js'), 'utf8');
+  assert.ok(p.includes('manifest.personaFiles'), 'p 段没走 manifest.personaFiles');
+  for (const f of ['g2-plugin-prereq.js', '00-prerequisites.js']) {
+    const s = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', f), 'utf8');
+    assert.ok(s.includes('test(txt)'), f + ' 凭据判定应走正则 .test(txt)（判值非空）');
+    assert.ok(!s.includes('txt.includes('), f + ' 凭据判定又退回 includes 了（注释模板会假绿）');
+  }
+});
+
 test('manifest.tweaks 元数据完整（id/name/what/revert/requiresAdmin 布尔）', () => {
   const m = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'config', 'manifest.json'), 'utf8'));
   assert.ok(Array.isArray(m.tweaks) && m.tweaks.length >= 1, 'manifest.tweaks 清单丢了');

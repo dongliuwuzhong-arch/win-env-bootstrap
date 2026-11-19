@@ -140,6 +140,44 @@ Describe 'Repair-ManualPackages 失配自修（审计 P2-6 回归）' {
         $script:renamed | Should -Be $null
         $script:junctionTo | Should -Be $null
     }
+    It 'junction 创建失败必须回滚改名，包不许消失（审计 N2 回归）' {
+        $script:renames = @()
+        Mock Rename-Item { $script:renames += [string]$PesterBoundParameters['NewName'] }
+        Mock New-Item { throw 'junction denied' }
+        Repair-ManualPackages 'C:\prof\node_modules' 'C:\host\node_modules' $cfg2
+        $script:renames.Count | Should -Be 2
+        $script:renames[0] | Should -Match '\.bak-'
+        $script:renames[1] | Should -Be 'dsh-compaction-basic'   # 回滚成原名
+    }
+}
+
+Describe 'Install-PathFix（审计 N3 回归）' {
+    BeforeEach {
+        Mock Write-Host { }
+        $script:added = @()
+        Mock Add-PathEntry {
+            $v = $PesterBoundParameters['dir']; if (-not $v) { $v = $args[0] }
+            $script:added += [string]$v
+            return $true
+        }
+        Mock Test-Path { $true }
+        $script:oldPath = $env:Path
+    }
+    AfterEach { $env:Path = $script:oldPath }
+    It '补 PATH 后当次就能复测到，且只加第一个命中的目录' {
+        Mock Get-CmdVersion { if ($env:Path -like '*C:\FakeToolDir*') { 'v1.2' } else { $null } }
+        $t = [pscustomobject]@{ pathDirs = @('C:\FakeToolDir'); exeName = 'ft.exe' }
+        Install-PathFix $t 'ft' '--version' | Should -Be 'v1.2'
+        $script:added.Count | Should -Be 1
+        ($env:Path -like '*C:\FakeToolDir*') | Should -Be $true
+    }
+    It '目录里没有 exe 就不加 PATH' {
+        Mock Test-Path { $false }
+        Mock Get-CmdVersion { $null }
+        $t = [pscustomobject]@{ pathDirs = @('C:\Nope'); exeName = 'ft.exe' }
+        Install-PathFix $t 'ft' '--version' | Should -BeNullOrEmpty
+        $script:added.Count | Should -Be 0
+    }
 }
 
 Describe 'Get-WingetId' {

@@ -83,6 +83,7 @@ test('tool_discover 无参数返回全量清单，不回 matched:0（审计 P3-2
   const r = JSON.parse(resp.result.content[0].text);
   assert.ok(r.matched > 0, '无过滤条件时不该是空清单');
   assert.ok(r.tools.length === r.matched);
+  assert.ok(typeof r.usage === 'string' && r.usage.includes('capability'), '注释说带 usage 就必须真带（审计 N6）');
 });
 
 test('取消处理在源码里在位：notifications/cancelled + -32800（审查建议 #13）', () => {

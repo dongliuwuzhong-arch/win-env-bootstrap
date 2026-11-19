@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 65 个文件 / 5336 行代码 / 122 条 node 测试 + 23 条 Pester（2026-11-19 实测） |
+| 规模 | 67 个文件 / 5560 行代码 / 128 条 node 测试 + 26 条 Pester（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 122/122、Pester 23/23 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 128/128、Pester 26/26 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -51,8 +51,8 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 122 条，必须全过
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 23 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 128 条，必须全过
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 26 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
@@ -94,8 +94,8 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
 scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve（progress/cancelled 已支持）
 scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              122 条契约测试，每条钉住一个真实发生过的 bug
-tests-ps/*.tests.ps1     23 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
+tests/*.mjs              128 条契约测试，每条钉住一个真实发生过的 bug
+tests-ps/*.tests.ps1     26 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
 .github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
 LICENSE / .gitignore     MIT / 备份与临时件忽略
@@ -200,6 +200,12 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 （`build-agents-md.ps1` 同款处理）。⚠️ **编辑动作会把 BOM 洗掉**，改完必须重补——
 锚点 `tests/ps-tests-contract.test.mjs` 会抓。2026-11-19 一轮里栽了两次。
 
+### 修复也要喂失败输入（2026-11-19 二审打脸记）
+
+修 P3-6 时把坏分支改成引用不存在的 `curUser`——**修复本身带着必崩分支，122 条测试全绿**，
+因为坏分支没有一条用例。铁律 #2 对「修复」同样成立：**改完坏分支，构造一个会走坏分支的输入跑一遍**。
+二审 N1 抓的这条，比任何功能 bug 都值得记。
+
 ### 工作区解析是双实现，改一处必须改两处
 
 `bootstrap.ps1` 顶部的解析块和 `scripts/lib/paths.js` 的 `resolveWorkspace()` 必须同顺序、
@@ -208,7 +214,7 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 
 ## 已知缺陷 / 没做的
 
-2026-11-19 两轮自查审查 + 一轮第三方审计（`docs/审计-20261119-WorkBuddy.md`）的严重项**代码侧都已修**（含 CI 判据失明、verify 批量输出、双脚本漂移三处、pip 吞 stderr），处置见 `docs/` 各报告与维护日志，回归锚点在 `tests/`。下表只记**仍然没做**的。
+2026-11-19 两轮自查审查 + 两轮第三方审计（`docs/审计-20261119-WorkBuddy.md`、`docs/审计二审-20261119.md`）的严重项**代码侧都已修**（二审 N1-N8 缺陷全清）（含 CI 判据失明、verify 批量输出、双脚本漂移三处、pip 吞 stderr），处置见 `docs/` 各报告与维护日志，回归锚点在 `tests/`。下表只记**仍然没做**的。
 
 | 项 | 状态 |
 |---|---|
@@ -219,6 +225,7 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 | Windows 10 / ARM64 / 离线 | 仍未实测；README「支持范围」已声明口径（2026-11-19） |
 | Get-CmdVersion 把 banner 首行当版本串（7z 显示版权行） | **没修**（审计 P3-5，纯展示问题） |
 | G2 修复产物无自动回滚校验 | **没做**（审计 P3-10），回滚步骤在 README「怎么退」 |
+| ExportInventory 调用前预探测 | **没做**（审计 P3-11，低价值——try/catch 已兜底） |
 | `G2` 修复源 | 源是宿主 `resources\app\dsh\node_modules` 与 `~/.dsh/plugins`，两者都得先从旧机带过来。真·新机两处皆空时修不了，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |

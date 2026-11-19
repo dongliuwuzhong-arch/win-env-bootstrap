@@ -144,6 +144,8 @@ async function callTool(name, args, msg) {
     });
     return text({
       matched: hit.length,
+      // 注释说了带 usage 就真的带（审计 N6：注释不许虚标）
+      ...(cap || kw ? {} : { usage: '用 capability 或 keyword 过滤，如 {"capability":"media:probe"}' }),
       tools: hit.map((t) => ({ name: t.name, capability: t.capability, consumer: t.consumer, degradedBehavior: t.degradedBehavior, install: t.winget || (t.pip && ('pip ' + t.pip)) || (t.npm && ('npm ' + t.npm)) || null })),
     });
   }

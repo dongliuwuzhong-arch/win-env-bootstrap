@@ -65,7 +65,9 @@ export async function check(ctx) {
     const agentsMd = join(ctx.DSH_HOME, 'AGENTS.md');
     if (ctx.exists(personaDir) && ctx.exists(agentsMd)) {
       const genTime = fs.statSync(agentsMd).mtimeMs;
-      const srcs = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md']
+      // 与 h 段同源：persona 清单读 manifest.personaFiles（审计 N7）
+      const srcs = (ctx.manifest && ctx.manifest.personaFiles && ctx.manifest.personaFiles.length)
+        ? ctx.manifest.personaFiles : ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md']
         .map((f) => join(personaDir, f))
         .filter((f) => ctx.exists(f))
         .map((f) => ({ f, t: fs.statSync(f).mtimeMs }));
