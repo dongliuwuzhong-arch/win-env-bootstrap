@@ -12,7 +12,7 @@ const ROOT = path.join(HERE, '..');
 // 新增安装动作时还是要手动同步两张表（README 的和 SKILL.md 的）。
 test('文档不再对可自动装的工具说「只检查不装」（审查一般 #7 回归锚点）', () => {
   const stale = ['只检查不装', '脚本不装', 'puppeteer 只提示', '只提示，不装'];
-  for (const f of ['README.md', 'SKILL.md']) {
+  for (const f of ['README.md', 'README.en.md', 'SKILL.md']) {
     const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
     for (const phrase of stale) {
       assert.ok(!s.includes(phrase), f + ' 里还有旧说法「' + phrase + '」——这些工具现在会自动装');

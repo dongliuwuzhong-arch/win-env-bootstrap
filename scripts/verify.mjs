@@ -43,7 +43,7 @@ function parseArgs(argv) {
       if (id && !only.includes(id)) only.push(id);
     }
   }
-  // --no-selfcheck：M 段要 7 秒，调试期跳过
+  // --no-selfcheck：M 段的 selfcheck 约 8 秒，调试期跳过
   const noSelfcheck = argv.slice(2).includes('--no-selfcheck');
   // --json：机器可读输出，MCP server 与自动化都靠它
   const json = argv.slice(2).includes('--json');

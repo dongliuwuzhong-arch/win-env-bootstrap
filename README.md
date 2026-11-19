@@ -2,20 +2,22 @@
 
 **换机第二阶段：公开工具装齐 + 十八类自检。**
 
+> [English](README.en.md) · 中文
+
 > 🔧 **要维护或修改它** → 读 [MAINTAINING.md](MAINTAINING.md)（文件地图、三条铁律、踩过的坑、还没做的事）。
 
 DSH（DeepSeek Harness）桌面端的**环境补齐与自检**技能。能自动装的那部分用 winget / pip 装上，
 PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报告。
 
 > Second stage of a DSH setup on Windows: install the public tools, add missing PATH entries,
-> run 17 categories of checks, print a Chinese report. It does not install DSH itself.
+> run 18 categories of checks, print a Chinese report. It does not install DSH itself. Full English docs: [README.en.md](README.en.md).
 
 ## 两阶段：谁负责哪一段
 
 | 阶段 | 谁做 | 内容 |
 |---|---|---|
 | **一（前提）** | 人 + 官方安装器 | 装 DSH 本体；拷工作区目录和 `~/.dsh\`（含 `profiles\desktop\node_modules`）；填 `.credentials.yaml` |
-| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 17 类自检出中文报告 |
+| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 18 类自检出中文报告 |
 
 阶段一没做完，阶段二只能报一堆红——它不代替阶段一。
 
@@ -42,9 +44,9 @@ PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报
 - **不填 `.credentials.yaml`**。缺文件时写一份**只有注释、没有任何值**的模板，key 得自己填。
 - **G2 修不了没有源的东西**。手工包要从宿主 `node_modules` 拷，本地插件要从 `~/.dsh/plugins` 拷；
   源不在就只报红。win-bash payload 只给指引，soul schema 只读不动数据。
-- **有些缺项只报告**：N/O/P 三段、PATH 重复项、curl.exe / winget 本体、
-  拿不到源的 G2 修复件。其余缺项 `-Apply` 会自动装（见下面「十八类检查」表）。
-- **PATH 只补不删**。重复项只报告，去重手工。
+- **有些缺项只报告**：G 段 DSH 本体、ffprobe（随 ffmpeg 装，缺了只提示重装）、
+  curl.exe / winget 本体、N/O/P 三段、拿不到源的 G2 修复件。其余缺项 `-Apply` 会自动装（见下面「十八类检查」表）。
+- **PATH 缺项只补不删；重复项自动去重**（`-Apply` / `-DedupPath`，先备份 path-dedup-*.txt）。
 - **不动宿主数据**（`~/.dsh/storages`、`~/.dsh/sessions`）。
 - **不改系统代理**。只给目标程序挂单独的代理启动器。
 - **不装 MSYS 缺失的 which/df/du**。用替代命令。
@@ -88,16 +90,17 @@ node scripts/verify.mjs
 
 | 段 | 查什么 | 缺了怎么办 |
 |---|---|---|
+| 00 人工前置（阶段一） | 装 DSH 本体 / 拷 `~/.dsh` / 拷工作区 / 填凭据 / 设 DSH_WORKSPACE | 只检查、只引导——阶段一是人工活，脚本从不做 |
 | A 核心运行时 | Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm | winget 装 Node、Python、Git；pnpm 先认 DSH 自带那份，没有才 `npm i -g`；curl.exe / winget 只提示 |
 | B 归档工具 | 7-Zip + 是否在 PATH（User 和 Machine 都查） | winget 装；装了但不在 PATH 就追加（先备份，备份失败不动） |
-| C 媒体工具 | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp、ImageMagick 走 winget；ffprobe 随 ffmpeg 装，缺了提示重装 Gyan.FFmpeg |
+| C 媒体工具 | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp、ImageMagick 走 winget（用 `magick` 调，`convert` 会撞系统磁盘工具）；ffprobe 随 ffmpeg 装，缺了提示重装 Gyan.FFmpeg |
 | D 浏览器自动化 | Chrome / puppeteer | Chrome 走 winget；puppeteer 在 `_tools\browser` 里自动 `npm i`（工作区没这目录才只提示） |
 | E 逆向工具（可选） | frida | 缺了走 pip 装 frida + frida-tools，装完复测 |
 | F Python 包 | 系统包 + wechat 取证包 + DSH 自带 python 核心包（清单来自 `manifest.pythonPackages`） | 全部缺了就走 pip 装（两套解释器分开装） |
 | G DSH 本体 | 宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容 / CLI shim | **只检查**——官方安装器的事 |
-| G2 插件加载前置 | junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1 | **会修**（`-RepairG2`，`-Apply` 隐含）：拷 5 个手工包（`dsh-compaction-basic` 建 junction）、拷 4 个本地插件、缺凭据写注释模板；win-bash payload、soul schema、宿主缺失只提示 |
+| G2 插件加载前置 | junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1 | **会修**（`-RepairG2`，`-Apply` 隐含）：拷 5 个手工包（`dsh-compaction-basic` 建 junction）、按 manifest.g2.localPlugins 清单拷本地插件（作者机 4 个，公开仓库默认留空需自填）、缺凭据写注释模板；win-bash payload、soul schema、宿主缺失只提示 |
 | H 工作区 | 七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码 | 缺目录 `-Apply` 自动建；人格、技能库只检查 |
-| I 系统配置 | PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页 | 执行策略 Restricted\|AllSigned 自动改；**PATH 重复项只报告，不去重**；计划任务只在 `-WithScheduledTasks` 时注册 |
+| I 系统配置 | PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页 | 执行策略 Restricted\|AllSigned 自动改 CurrentUser RemoteSigned；PATH 重复项自动去重（`-Apply`/`-DedupPath`，先备份 path-dedup-*.txt）；计划任务只在 `-WithScheduledTasks` 时注册；代码页只提示 |
 | J 网络 | 本地代理端口 7897 | 只提示 |
 | K 代理与自启 | 启动器 vbs / Run 键 | `-WithProxy` 生成 |
 | L 脚本可跑性 | check-paths / check-skills / persona-lint / check-persona-context | 只报哪个挂了 |
@@ -115,7 +118,7 @@ DSH 自带 python 的 numpy/pandas/openpyxl/pillow/lxml，清单以 `manifest.py
 
 单点自动改的只有：PATH 缺项追加（先备份）、执行策略 Restricted/AllSigned → CurrentUser RemoteSigned、
 `-WithProxy` 写启动器 + Run 键、`-WithScheduledTasks` 注册计划任务，
-以及 G2 修复（`-RepairG2`）：`dsh-compaction-basic` 建 junction、4 个手工包 + 4 个本地插件拷贝、
+以及 G2 修复（`-RepairG2`）：`dsh-compaction-basic` 建 junction、4 个手工包 + 本地插件按清单拷（作者机 4 个）、
 缺凭据时写注释模板。**只补缺，已有的一律跳过。**
 
 其余全部只报告。`verify.mjs` 一个字节都不改系统——只写一个临时探针文件试可写性，然后删掉。
@@ -130,7 +133,7 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
    junction 指向宿主最稳，但同版本目录拷贝也能跑——脚本把「版本不一致」判红、把「不是 junction」记 info。
    新机跑 pnpm install 造不出这个 junction，而多个预设都挂了某个插件的压缩后端。
 2. **profile 里 @deepseek-ai/ 下 5 个包全是手工放的**，不在 dependencies 里，pnpm install 不会补。
-3. **~/.dsh/plugins/ 的 4 个本地插件是拷贝不是符号链接**。只拷 ~/.dsh/ 不带 node_modules 时四个全缺。
+3. **本地插件是拷贝不是符号链接**（清单在 manifest.g2.localPlugins，作者机 4 个，公开仓库默认留空需自填）。只拷 ~/.dsh/ 不带 node_modules 时清单里的全缺。
 4. **会改宿主文件的插件要能写宿主安装目录**。装在 Program Files 且非管理员时，补丁一条都落不下去。
 5. **用 SQLite 的插件有 schema 版本硬门**。库里 user_version 高于插件支持的值会直接 throw。
 
@@ -145,7 +148,8 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
 
 | 改动 | 怎么撤 |
 |---|---|
-| 用户 PATH | 每次 `-Apply` 前备份到 `~/.dsh/path-backup-*.txt`，覆盖回去即可 |
+| 用户 PATH 缺项追加 | 每次 `-Apply` 前备份到 `~/.dsh/path-backup-*.txt`，覆盖回去即可 |
+| 用户 PATH 去重 | 每次去重前备份到 `~/.dsh/path-dedup-*.txt`，覆盖回去即可 |
 | `HKCU\...\Run\DSH` | `Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name DSH` |
 | 计划任务 `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
 | G2 修复产物 | `profiles\desktop\node_modules` 下新建的 junction / 拷贝的包删掉即可；脚本只补缺，已有的一律跳过 |
@@ -160,13 +164,9 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
 
 之后说「装环境」「换电脑」「bootstrap」就能触发。
 
-## License
-
-MIT
-
 ## 首次使用：指定工作区
 
-公开仓库里**不写死任何人的工作区路径**。第一次跑之前，用下面任一方式告诉它工作区在哪：
+脚本**不依赖作者的工作区路径**——内置兜底 `C:\DSH空间`，用下面任一方式即可覆盖。第一次跑之前告诉它工作区在哪：
 
 ```powershell
 # 方式一：环境变量（推荐，一次设好）
@@ -178,4 +178,10 @@ MIT
 
 优先级：`-Workspace` 参数 > `DSH_WORKSPACE` 环境变量 > `config/manifest.json` 的 `workspace.default`。
 
-没设的话 H 段会报「工作区不存在」——这是提示，不是 bug。
+没设的话会回落到内置默认 `C:\DSH空间`（和 bootstrap 同口径）；路径不存在时 H 段报「工作区不存在: …」——这是提示，不是 bug。
+
+MAINTAINING.md 是维护交接文档；docs/ 下有历次审查报告归档和[维护日志](docs/维护日志.md)。
+
+## License
+
+MIT

@@ -10,10 +10,12 @@
 | 项 | 值 |
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
-| HEAD | 2026-11-19 开箱即用审查修复轮（报告与逐项处置见 `docs/审查-20261119-开箱即用.md`） |
-| 规模 | 45 个文件 / 4264 行代码 / 105 条测试（2026-11-19 实测） |
+| HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
+| 规模 | 53 个文件 / 4339 行代码 / 108 条测试（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；105/105 测试 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；108/108 测试 |
+| 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
+| 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
 ⚠️ **别把它当成「新电脑一键配齐」**。文档已经诚实改口，但它离那个目标还差三件事（见文末「没做的」）。
 
@@ -49,12 +51,19 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 105 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 108 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
 
 任何一项不过，就不许推。`smoke.ps1` 自己会跑前两项再加语法检查。
+
+```bash
+# 推：本机 github.com 直连不通，仓库本地 config 已配 http.proxy=127.0.0.1:7897
+git add -A && git commit -m "..." && git push
+# 推完看一眼 CI（绿了才算落地）：
+# https://github.com/dongliuwuzhong-arch/dsh-env-bootstrap/actions
+```
 
 ## 文件地图
 
@@ -62,11 +71,11 @@ powershell -File scripts/smoke.ps1                   # PASS
 config/manifest.json     单一配置源：18 段类别 / 17 个工具 / G2 清单 / python 包 / POSIX 映射 / 人工前置
                          ↑ 改检查项、加工具、改 winget ID 都优先改这里
 
-scripts/bootstrap.ps1    引导层（PS 5.1，纯 ASCII，~1050 行）
+scripts/bootstrap.ps1    引导层（PS 5.1，纯 ASCII）
                          -Check 只读 / -Apply 装+修 / -RepairG2 只修插件前置
                          -DedupPath 真去重 PATH / -Workspace 指定工作区
 
-scripts/verify.mjs       装载器（90 行）：按 manifest 顺序跑 checks、排版、定退出码
+scripts/verify.mjs       装载器：按 manifest 顺序跑 checks、排版、定退出码
                          --only=A,G2 / --no-selfcheck / --json
 
 scripts/lib/
@@ -83,8 +92,11 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
 
 scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              105 条契约测试，每条钉住一个真实发生过的 bug
+tests/*.mjs              108 条契约测试，每条钉住一个真实发生过的 bug
 .github/workflows/ci.yml windows-latest，不含任何 -Apply
+docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
+LICENSE / .gitignore     MIT / 备份与临时件忽略
+README.md / README.en.md 中文 / 英文说明，逐节镜像，改一份必须改另一份
 ```
 
 ## 常用命令
@@ -98,7 +110,7 @@ node $S/scripts/verify.mjs
 node $S/scripts/verify.mjs --json
 # 只跑某几段
 node $S/scripts/verify.mjs --only=A,G2,00
-# 快速模式（跳过 7 秒的 selfcheck）
+# 快速模式（跳过 M 段 selfcheck，约 8~9 秒）
 node $S/scripts/verify.mjs --no-selfcheck
 
 # 引导层
@@ -196,7 +208,7 @@ wechat-history 的 check-env.py 用 `importlib.util.find_spec` 查 **import 名*
 | 非标准安装路径（D 盘等） | 代码已走 `ctx.DSH_ROOT`，但**没在那样的机器上实测过** |
 | 非管理员会话 | winget 机器级安装的提权提示**没实测** |
 | Windows 10 / ARM64 / 离线 | 未覆盖，文档里也没声明不支持 |
-| `G2` 修复源 | 只能从旧机拷。想让真·新机也能修，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
+| `G2` 修复源 | 源是宿主 `resources\app\dsh\node_modules` 与 `~/.dsh/plugins`，两者都得先从旧机带过来。真·新机两处皆空时修不了，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
 | verify / MCP 长耗时段无进度（M 段最长 240s） | **没做**（审查建议 #11）。要做得上流式逐段输出 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |

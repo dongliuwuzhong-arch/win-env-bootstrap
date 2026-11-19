@@ -62,8 +62,10 @@ export async function check(ctx) {
   // 2) 本地插件是拷贝不是链接，换机只拷 ~/.dsh 不带 node_modules 就全缺
   const localPlugins = (ctx.manifest?.g2?.localPlugins || []);
   const missingLocal = localPlugins.filter((n) => !ctx.exists(join(profNM, n)));
-  if (missingLocal.length) out.push(bad('本地插件缺失: ' + missingLocal.join(', ')));
-  else out.push(ok('本地插件 4/4'));
+  // 清单为空时不许说「4/4」——那是谎报（2026-11-19 二验 A3）
+  if (!localPlugins.length) out.push(info('本地插件清单为空（manifest.g2.localPlugins 自填后才查）'));
+  else if (missingLocal.length) out.push(bad('本地插件缺失: ' + missingLocal.join(', ')));
+  else out.push(ok('本地插件 ' + localPlugins.length + '/' + localPlugins.length));
 
   // 18 个 bundle 逐个查：只查 4 个本地插件会漏掉另外 14 个，
   // 换机漏拷 profile/node_modules 时报告仍是绿的
