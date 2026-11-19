@@ -82,7 +82,10 @@ test('core profile 不许带出 DSH 专属段（验收①：无 DSH 沙箱全量
     const j = JSON.parse(r.stdout);
     const segs = new Set(j.results.map((x) => x.segment));
     for (const bad of ['00', 'G', 'G2', 'H', 'L', 'M']) assert.ok(!segs.has(bad), 'core profile 不该跑 ' + bad + ' 段');
-    assert.ok(j.exitCode === 0 || j.exitCode === 2, 'core profile 退出码不该被 DSH 段污染成 1，实际 ' + j.exitCode);
+    // 「不被 DSH 段污染」的保证是段级排除（计数只来自 results）——退出码断言三档即可，
+    // 裸 runner 上 core 自己就有硬缺口（没 7z），exit 1 在那里是合法的
+    assert.ok([0, 1, 2].includes(j.exitCode), 'core profile 退出码必须是正常三档，实际 ' + j.exitCode);
+    assert.equal(j.counts.hard, j.results.filter((x) => x.level === 'bad').length, '计数只许来自启用段');
   } finally { fs.rmSync(home, { recursive: true, force: true }); fs.rmSync(ws, { recursive: true, force: true }); }
 });
 
