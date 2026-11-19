@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="470" font-family="Microsoft YaHei, sans-serif">
+  <rect width="720" height="470" fill="#f7f8fa"/>
+  <text x="28" y="42" font-size="20" font-weight="bold" fill="#1f2329">社区对标 · dsh-env-bootstrap 可抄清单</text>
+  <text x="28" y="66" font-size="12" fill="#8a919f">Boxstarter / 微软 hve-core / winget DSC / MCP 规范 · 2026-11-19</text>
+  <g font-size="13">
+    <rect x="20" y="84" width="680" height="48" rx="8" fill="#fdebec"/>
+    <text x="36" y="113" font-weight="bold" fill="#c0392b">断电续跑检测</text>
+    <text x="200" y="113" fill="#45515c">Boxstarter 模式：挂起重启检测，提示重跑 -Apply</text>
+    <rect x="596" y="98" width="88" height="24" rx="12" fill="#e74c3c"/><text x="614" y="114" fill="#fff">P0 先做</text>
+
+    <rect x="20" y="140" width="680" height="48" rx="8" fill="#fdebec"/>
+    <text x="36" y="169" font-weight="bold" fill="#c0392b">Pester 直测 PS 函数</text>
+    <text x="200" y="169" fill="#45515c">照微软 hve-core：Say/Install-Pkg/去重函数单测入 CI</text>
+    <rect x="596" y="154" width="88" height="24" rx="12" fill="#e74c3c"/><text x="614" y="170" fill="#fff">P0 先做</text>
+
+    <rect x="20" y="196" width="680" height="48" rx="8" fill="#fdebec"/>
+    <text x="36" y="225" font-weight="bold" fill="#c0392b">幂等收敛契约测试</text>
+    <text x="200" y="225" fill="#45515c">二次 -Apply 零改动，把口头承诺钉成测试</text>
+    <rect x="596" y="210" width="88" height="24" rx="12" fill="#e74c3c"/><text x="614" y="226" fill="#fff">P0 先做</text>
+
+    <rect x="20" y="252" width="680" height="48" rx="8" fill="#fef5e7"/>
+    <text x="36" y="281" font-weight="bold" fill="#b9770e">CI 矩阵扩机型</text>
+    <text x="200" y="281" fill="#45515c">windows-2022 + latest，清「未覆盖」的账</text>
+    <rect x="596" y="266" width="88" height="24" rx="12" fill="#f39c12"/><text x="614" y="282" fill="#fff">P1 跟上</text>
+
+    <rect x="20" y="308" width="680" height="48" rx="8" fill="#fef5e7"/>
+    <text x="36" y="337" font-weight="bold" fill="#b9770e">MCP progress/cancel</text>
+    <text x="200" y="337" fill="#45515c">长任务发进度通知，支持掐断，清留账 #11/#13</text>
+    <rect x="596" y="322" width="88" height="24" rx="12" fill="#f39c12"/><text x="614" y="338" fill="#fff">P1 跟上</text>
+
+    <rect x="20" y="364" width="680" height="48" rx="8" fill="#eafaf1"/>
+    <text x="36" y="393" font-weight="bold" fill="#1e8449">-ExportInventory</text>
+    <text x="200" y="393" fill="#45515c">winget export + pip/npm 清单，换机有单可查</text>
+    <rect x="596" y="378" width="88" height="24" rx="12" fill="#27ae60"/><text x="614" y="394" fill="#fff">P1 顺手</text>
+
+    <rect x="20" y="420" width="680" height="42" rx="8" fill="#eaf2f8"/>
+    <text x="36" y="446" font-weight="bold" fill="#1a5276">winget configure 备胎</text>
+    <text x="200" y="446" fill="#45515c">DSC 官方引擎对齐，只接管「装工具」那半层</text>
+    <rect x="596" y="431" width="88" height="24" rx="12" fill="#2980b9"/><text x="614" y="447" fill="#fff">P2 中期</text>
+  </g>
+</svg>
