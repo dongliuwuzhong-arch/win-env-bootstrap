@@ -116,7 +116,15 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
                 Say "  linked $pkg -> $src" 'fix'
             } else {
                 Copy-Tree $src $dst
-                Say "  copied $pkg from host" 'fix'
+                # Verify after copy: an interrupted copy leaves a half package that
+                # still looks present but fails to load.
+                $srcPkg = Join-Path $src 'package.json'
+                $dstPkg = Join-Path $dst 'package.json'
+                if ((Test-Path -LiteralPath $srcPkg) -and -not (Test-Path -LiteralPath $dstPkg)) {
+                    Say "  copied $pkg but package.json is missing - copy was incomplete" 'bad'
+                } else {
+                    Say "  copied $pkg from host" 'fix'
+                }
             }
         } catch { Say "  repair $pkg failed: $_" 'bad' }
     }
