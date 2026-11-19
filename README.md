@@ -73,6 +73,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -App
 
 # 4. 再加对话存档计划任务（可选）
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Apply -WithScheduledTasks
+
+# 5. 系统调优（可选，逐项 opt-in、全部可回退——见「系统调优」一节）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -List
+
+# 6. 导出换机清单（winget + 两套 pip + npm，落 ~/.dsh/inventory-*.json）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -ExportInventory
 ```
 
 装完 Node 之后跑详细自检：
@@ -143,6 +149,37 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
 
 - **`-split` 只返回一条时是 String 不是数组** —— `($parts + $dir)` 做字符串拼接，整条 PATH 糊成 `C:\AAAC:\BBB`，且每跑一次更烂。
 - **`Set-Content -Encoding ASCII` 写中文变 `?`** —— VBS 路径含中文就静默失效，开机自启坏得无声无息。
+
+## 系统调优（可选）
+
+环境补齐之外的 Windows 设置调校，**逐项 opt-in、全部可回退**，清单在 `config/manifest.json` 的 `tweaks[]`：
+
+| id | 干什么 | 怎么撤 | 权限 |
+|---|---|---|---|
+| longpaths | LongPathsEnabled=1，Win32 长路径不截断 | 设回 0 | admin |
+| power-highperf | 激活高性能电源计划 | 切回平衡 | 普通 |
+| gamebar-off | 关 Game Bar 后台录制（HKCU） | 设回 1 | 普通 |
+| defender-exclusions | 工作区/DSH 目录加 Defender 排除 | 移除排除项 | admin |
+| hiberfil-off | 关休眠，释放 hiberfil.sys | powercfg /hibernate on | admin |
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -List          # 纯探测，不改任何东西
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Apply gamebar-off
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Revert gamebar-off
+```
+
+探不到真实状态时报 `unknown`，不猜（比如 Defender 被第三方杀软接管时）。admin 项在非管理员终端报 FAIL 就停手，不硬写。
+
+## 换机清单导出
+
+`bootstrap.ps1 -ExportInventory` 把 winget export + 两套 python 的 pip list
++ npm 全局包导出到 `~/.dsh/inventory-时间戳.json`（winget 部分另出 `inventory-时间戳-winget.json`，
+微软官方换机格式）。`-InventoryPath` 可改落点目录。换机后对着清单查漏，不用人肉记。
+
+## 挂起重启检测
+
+`-Check` / `-Apply` 开头探测三个挂起重启源（PendingFileRenameOperations / CBS / Windows Update），
+有就先提示「重启后重跑」——驱动类包装到一半重启，不重跑就半残。
 
 ## 怎么退
 

@@ -22,6 +22,8 @@ param(
     [switch]$WithScheduledTasks,
     [switch]$RepairG2,
     [switch]$DedupPath,
+    [switch]$ExportInventory,
+    [string]$InventoryPath,
     [string]$Workspace
 )
 
@@ -222,6 +224,27 @@ function Resolve-DshRoot {
     return $null
 }
 
+function Test-PendingReboot {
+    # Boxstarter-style: surface a pending reboot BEFORE installs. winget driver /
+    # system packages mid-flight followed by a reboot leaves the user not knowing
+    # to re-run -Apply can silently half-fail otherwise.
+    $reasons = @()
+    try {
+        $ren = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
+        # Judge the VALUE, not the wrapper object: the property can exist and hold an
+        # empty array, which must not count as pending (#12)
+        if ($ren -and $ren.PendingFileRenameOperations) { $reasons += 'PendingFileRenameOperations' }
+    } catch { }
+    try {
+        if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $reasons += 'ComponentBasedServicing' }
+    } catch { }
+    try {
+        if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $reasons += 'WindowsUpdate' }
+    } catch { }
+    # Do not comma-wrap: callers use @(...) and .Count; an empty array degrades to $null safely.
+    return $reasons
+}
+
 function Get-CmdVersion($exe, $argList) {
     # Must require exit code 0 AND a non-empty non-error line.
     # "|| $out" would treat the Microsoft Store python stub (exit 9009,
@@ -240,11 +263,16 @@ function Get-CmdVersion($exe, $argList) {
     return $null
 }
 
+function Get-UserPath { return [Environment]::GetEnvironmentVariable('Path', 'User') }
+function Set-UserPath($value) { [Environment]::SetEnvironmentVariable('Path', $value, 'User') }
+function Get-MachinePath { return [Environment]::GetEnvironmentVariable('Path', 'Machine') }
+
 function Test-PathEntry($dir) {
-    # Check BOTH scopes: 7-Zip installer "for all users" writes Machine PATH only
+    # Check BOTH scopes: 7-Zip installer "for all users" writes Machine PATH only.
+    # PATH access goes through Get-UserPath/Get-MachinePath so tests can mock it.
     $key = $dir.TrimEnd('\').ToLower()
     foreach ($scope in @('User', 'Machine')) {
-        $p = [Environment]::GetEnvironmentVariable('Path', $scope)
+        $p = if ($scope -eq 'User') { Get-UserPath } else { Get-MachinePath }
         if (-not $p) { continue }
         foreach ($e in @($p -split ';' | Where-Object { $_ -ne '' })) {
             if ($e.TrimEnd('\').ToLower() -eq $key) { return $true }
@@ -254,7 +282,7 @@ function Test-PathEntry($dir) {
 }
 
 function Add-PathEntry($dir) {
-    $p = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $p = Get-UserPath
     if (-not $p) { $p = '' }
     # Backup into ~/.dsh, not C:\Windows\Temp (gets cleaned, nobody looks there)
     $backupDir = Join-Path $env:USERPROFILE '.dsh'
@@ -276,14 +304,14 @@ function Add-PathEntry($dir) {
         if ($e.TrimEnd('\').ToLower() -eq $key) { return $false }
     }
     $new = (@($parts) + $dir) -join ';'
-    [Environment]::SetEnvironmentVariable('Path', $new, 'User')
+    Set-UserPath $new
     Say "added to PATH: $dir" 'fix'
     return $true
 }
 
 function Remove-PathDuplicates {
     # Real dedupe (docs used to claim auto-dedupe while the code never did it).
-    $p = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $p = Get-UserPath
     if (-not $p) { return }
     $parts = @($p -split ';' | Where-Object { $_ -ne '' })
     $seen = @{}
@@ -305,7 +333,7 @@ function Remove-PathDuplicates {
         Say "PATH backup FAILED, refusing to dedupe: $_" 'bad'
         return
     }
-    [Environment]::SetEnvironmentVariable('Path', ($clean -join ';'), 'User')
+    Set-UserPath ($clean -join ';')
     Say "deduped user PATH: $($parts.Count) -> $($clean.Count) entries (backup: $backup)" 'fix'
 }
 
@@ -368,6 +396,64 @@ function Install-Pip($pyExe, $pkg, $label) {
     if ($LASTEXITCODE -eq 0) { Say "installed $label" 'fix' } else { Say "$label install failed" 'warn' }
 }
 
+function Export-Inventory {
+    # Machine inventory for migration: winget export + pip list (both interpreters)
+    # + npm global. Lives next to the PATH backups in ~/.dsh so it travels with the copy.
+    $outDir = if ($InventoryPath) { $InventoryPath } else { Join-Path $env:USERPROFILE '.dsh' }
+    if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $out = Join-Path $outDir ('inventory-' + $stamp + '.json')
+    $wg = Join-Path $outDir ('inventory-' + $stamp + '-winget.json')
+    $inv = [ordered]@{ generated = (Get-Date -Format 'o'); host = $env:COMPUTERNAME; wingetFile = $wg }
+    # winget export is Microsoft's own machine-migration inventory format
+    $global:LASTEXITCODE = -1
+    try { & winget export --output $wg --accept-source-agreements 2>&1 | Out-Null } catch { }
+    $inv.wingetExported = ($LASTEXITCODE -eq 0)
+    # Get-Command resolves the Microsoft Store python stub (exit 9009) - gate it through
+    # Get-CmdVersion's double criteria first. Every section carries an Ok flag so error
+    # output never lands in the inventory data (#9)
+    $py = $null
+    foreach ($n in @('python', 'python3')) {
+        if (Get-CmdVersion $n '--version') {
+            $py = Get-Command $n -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($py) { break }
+        }
+    }
+    $inv.pipSystem = ''
+    $inv.pipSystemOk = $false
+    if ($py) {
+        try {
+            $raw = ((& $py.Source -m pip list --format=json 2>&1) | Out-String).Trim()
+            $null = $raw | ConvertFrom-Json -ErrorAction Stop
+            $inv.pipSystem = $raw
+            $inv.pipSystemOk = $true
+        } catch { }
+    }
+    $dshPy = Join-Path $dshHome 'dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
+    $inv.pipDsh = ''
+    $inv.pipDshOk = $false
+    if (Test-Path -LiteralPath $dshPy) {
+        try {
+            $raw = ((& $dshPy -m pip list --format=json 2>&1) | Out-String).Trim()
+            $null = $raw | ConvertFrom-Json -ErrorAction Stop
+            $inv.pipDsh = $raw
+            $inv.pipDshOk = $true
+        } catch { }
+    }
+    $inv.npmGlobal = ''
+    $inv.npmGlobalOk = $false
+    try {
+        $raw = ((& npm -g list --depth=0 --json 2>&1) | Out-String).Trim()
+        $null = $raw | ConvertFrom-Json -ErrorAction Stop
+        $inv.npmGlobal = $raw
+        $inv.npmGlobalOk = $true
+    } catch { }
+    # WriteAllText without BOM: PS 5.1 Set-Content -Encoding UTF8 writes a BOM and
+    # JSON.parse on the node side chokes on it (#8)
+    [System.IO.File]::WriteAllText($out, ($inv | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    Say "inventory written: $out" 'fix'
+}
+
 Write-Host ""
 Write-Host "=== dsh-env-bootstrap ===" -ForegroundColor Cyan
 Write-Host ("mode : " + $(if ($Apply) { 'APPLY' } else { 'CHECK' }))
@@ -389,6 +475,13 @@ $wsConfigured = [bool]($env:DSH_WORKSPACE -or ($mfWs -and $mfWs.workspace -and $
 
 # DSH_HOME can be overridden: bare-metal simulation and a different user name both need it
 $dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+
+# -ExportInventory is a standalone action (like -DedupPath): dump and exit.
+if ($ExportInventory) {
+    Say 'exporting machine inventory (winget + pip x2 + npm) ...' 'head'
+    Export-Inventory
+    exit 0
+}
 
 # 0. manual prerequisites (phase 1 - human work). Printed FIRST so the red lines
 # below are not misread as "this script is broken": installing the host, copying
@@ -414,6 +507,12 @@ if ($mfPre -and $mfPre.prerequisites) {
     }
     if ($preMissing -gt 0) { Say "the items above are phase-1 human work - this script never does them" 'info' }
 } else { Say "manifest has no prerequisites list" 'info' }
+
+# Pending reboot changes install reliability - say it BEFORE the install sections.
+$pendingReboot = @(Test-PendingReboot)
+if ($pendingReboot.Count -gt 0) {
+    Say ('pending reboot detected (' + ($pendingReboot -join ', ') + ') - installs may half-fail; reboot, then re-run -Apply') 'warn'
+}
 
 # ============ A. core runtimes ============
 Say 'A. core runtimes' 'head'

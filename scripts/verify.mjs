@@ -47,18 +47,27 @@ function parseArgs(argv) {
   const noSelfcheck = argv.slice(2).includes('--no-selfcheck');
   // --json：机器可读输出，MCP server 与自动化都靠它
   const json = argv.slice(2).includes('--json');
-  return { only, noSelfcheck, json };
+  // --jsonl：流式输出，每段完成吐一行 {type:'segment'}，最后一行 {type:'done',...}。
+  // MCP 拿它发进度通知（240s 的 M 段不再无反馈），模式下段是串行跑的。
+  const jsonl = argv.slice(2).includes('--jsonl');
+  return { only, noSelfcheck, json, jsonl };
 }
 
 const ctx = createContext();
-const { only, noSelfcheck, json } = parseArgs(process.argv);
-// --json 时把所有人类可读输出静音，只在最后吐一份 JSON
-const say = json ? () => {} : console.log;
+const { only, noSelfcheck, json, jsonl } = parseArgs(process.argv);
+// --json/--jsonl 时把所有人类可读输出静音，只吐机器可读行
+const say = (json || jsonl) ? () => {} : console.log;
 
 const byId = new Map(CHECKS.map((m) => [m.id, m]));
 const unknown = only.filter((id) => !byId.has(id));
 if (unknown.length) {
   console.error('未知检查段: ' + unknown.join(', ') + '（可用: ' + [...byId.keys()].join(',') + '）');
+  process.exit(64);
+}
+// --only= 空值是用法错误，不许静默退化成全量跑（break-it 露馅①）
+const onlyRaw = process.argv.slice(2).filter((a) => a.startsWith('--only='));
+if (onlyRaw.length && !only.length) {
+  console.error('--only 需要至少一个段 id（如 --only=A,G2）');
   process.exit(64);
 }
 
@@ -77,7 +86,25 @@ say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
 
 // 并行跑（ctx 的探测在 createContext 里已 memo，PowerShell 快照也只取一次），
 // 但严格按 manifest 顺序输出——否则报告读起来会跳。
-const settled = await Promise.allSettled(todo.map((m) => m.check(ctx)));
+// --jsonl 例外：串行跑，每段完成立刻吐进度行，让调用方看得到过程。
+let settled;
+if (jsonl) {
+  settled = [];
+  for (const m of todo) {
+    const st = await m.check(ctx).then((v) => ({ status: 'fulfilled', value: v }), (e) => ({ status: 'rejected', reason: e }));
+    settled.push(st);
+    // 崩溃段要如实报 hard:1（done 载荷里有「检查段崩了」bad 条），不许进度行装全绿（code-audit #6）
+    const crashed = st.status !== 'fulfilled';
+    const res0 = crashed ? [] : st.value;
+    process.stdout.write(JSON.stringify({
+      type: 'segment', id: m.id, ...(crashed ? { crashed: true } : {}),
+      hard: crashed ? 1 : res0.filter((r) => r.level === 'bad').length,
+      soft: res0.filter((r) => r.level === 'warn').length,
+    }) + '\n');
+  }
+} else {
+  settled = await Promise.allSettled(todo.map((m) => m.check(ctx)));
+}
 
 const results = [];
 for (let i = 0; i < todo.length; i++) {
@@ -99,8 +126,8 @@ for (let i = 0; i < todo.length; i++) {
 const c = counts(results);
 const s = summary(c);
 
-if (json) {
-  process.stdout.write(JSON.stringify({
+if (json || jsonl) {
+  const payload = {
     tool: 'dsh-env-bootstrap/verify',
     version: 1,
     host: os.hostname(),
@@ -111,7 +138,9 @@ if (json) {
     counts: c,
     exitCode: s.code,
     results: results.map((r) => ({ segment: r.id, level: r.level, message: r.message, fix: r.fix || undefined })),
-  }, null, 2));
+  };
+  if (jsonl) process.stdout.write(JSON.stringify({ type: 'done', ...payload }) + '\n');
+  else process.stdout.write(JSON.stringify(payload, null, 2));
   process.exit(s.code);
 }
 

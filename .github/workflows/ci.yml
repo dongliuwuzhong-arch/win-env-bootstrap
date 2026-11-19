@@ -17,11 +17,12 @@ env:
 
 jobs:
   windows:
-    name: windows-latest / node ${{ matrix.node }}
-    runs-on: windows-latest
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-2022, windows-latest]
         node: ['24']
     defaults:
       run:
@@ -44,6 +45,25 @@ jobs:
         run: |
           Set-Location $env:SKILL_ROOT
           node --test 'tests/**/*.test.mjs'
+
+      # Pester 直测 bootstrap.ps1 的函数 + 幂等收敛契约。装 Pester 5 要先引导
+      # NuGet provider（无头会撞 ShouldContinue 空引用），且必须 -ExecutionPolicy
+      # Bypass（runner 上 AllSigned 会拒载未签名测试文件）。
+      - name: Pester（bootstrap.ps1 函数直测 + 幂等收敛）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null
+          Install-Module Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -MinimumVersion 5.0
+          # 判据必须读结果对象：Invoke-Pester 是 cmdlet 不设 $LASTEXITCODE，
+          # Pester 5/6 的 -CI 语义也不同——按退出码判拿到的是环境残留，红绿都会判反（code-audit #1）
+          $r = Invoke-Pester -Path tests-ps -CI -PassThru
+          if ($r.FailedCount -gt 0) {
+            Write-Host "::error::Pester 失败 $($r.FailedCount) 例"
+            exit 1
+          }
+          exit 0
 
       - name: 语法检查（node --check）
         run: |

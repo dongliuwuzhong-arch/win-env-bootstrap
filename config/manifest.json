@@ -445,6 +445,43 @@
     "make": "(装 GnuWin32.Make)",
     "unzip": "Expand-Archive 或 7z x"
   },
+  "tweaks": [
+    {
+      "id": "longpaths",
+      "name": "长路径支持",
+      "what": "HKLM LongPathsEnabled=1，Win32 长路径不再被截断",
+      "revert": "设回 0",
+      "requiresAdmin": true
+    },
+    {
+      "id": "power-highperf",
+      "name": "电源高性能计划",
+      "what": "激活高性能电源计划（游戏/编译负载）",
+      "revert": "切回平衡计划",
+      "requiresAdmin": false
+    },
+    {
+      "id": "gamebar-off",
+      "name": "关闭 Game Bar 后台录制",
+      "what": "HKCU GameDVR/AppCapture 关闭，省后台开销",
+      "revert": "设回 1",
+      "requiresAdmin": false
+    },
+    {
+      "id": "defender-exclusions",
+      "name": "Defender 排除工作区与 DSH 目录",
+      "what": "给工作区/DSH 目录加 Defender 排除，减少 IO 扫描",
+      "revert": "移除排除项",
+      "requiresAdmin": true
+    },
+    {
+      "id": "hiberfil-off",
+      "name": "关闭休眠（省磁盘）",
+      "what": "powercfg /hibernate off，释放 hiberfil.sys",
+      "revert": "powercfg /hibernate on",
+      "requiresAdmin": true
+    }
+  ],
   "prerequisites": [
     {
       "id": "dsh-host",

@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 53 个文件 / 4339 行代码 / 108 条测试（2026-11-19 实测） |
+| 规模 | 62 个文件 / 5015 行代码 / 117 条 node 测试 + 21 条 Pester（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；108/108 测试 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 117/117、Pester 21/21 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -51,12 +51,13 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 108 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 117 条，必须全过
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 21 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
 
-任何一项不过，就不许推。`smoke.ps1` 自己会跑前两项再加语法检查。
+任何一项不过，就不许推。`smoke.ps1` 自己会跑 node --test + verify 快段 + 语法检查 + bootstrap 退出码断言；**Pester 要单独跑**。
 
 ```bash
 # 推：本机 github.com 直连不通，仓库本地 config 已配 http.proxy=127.0.0.1:7897
@@ -90,10 +91,12 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
                          J 网络 / K 自启 / L 脚本可跑性 / M 总检 / N 技能级依赖
                          O 系统环境 / P 完整性与迁移
 
-scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve
+scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve（progress/cancelled 已支持）
+scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              108 条契约测试，每条钉住一个真实发生过的 bug
-.github/workflows/ci.yml windows-latest，不含任何 -Apply
+tests/*.mjs              117 条契约测试，每条钉住一个真实发生过的 bug
+tests-ps/*.tests.ps1     21 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
+.github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
 LICENSE / .gitignore     MIT / 备份与临时件忽略
 README.md / README.en.md 中文 / 英文说明，逐节镜像，改一份必须改另一份
@@ -110,7 +113,7 @@ node $S/scripts/verify.mjs
 node $S/scripts/verify.mjs --json
 # 只跑某几段
 node $S/scripts/verify.mjs --only=A,G2,00
-# 快速模式（跳过 M 段 selfcheck，约 8~9 秒）
+# 快速模式（跳过 M 段 selfcheck，省数秒）
 node $S/scripts/verify.mjs --no-selfcheck
 
 # 引导层
@@ -191,6 +194,12 @@ wechat-history 的 check-env.py 用 `importlib.util.find_spec` 查 **import 名*
 `importlib.metadata.packages_distributions()` 为准；manifest 的 pythonPackages 一律存分发名，
 `importName` 字段只作注释，不参与匹配。
 
+### PS 5.1 无 BOM 的 UTF-8（含中文）会炸解析
+
+bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注释，必须写 UTF-8 **BOM**
+（`build-agents-md.ps1` 同款处理）。⚠️ **编辑动作会把 BOM 洗掉**，改完必须重补——
+锚点 `tests/ps-tests-contract.test.mjs` 会抓。2026-11-19 一轮里栽了两次。
+
 ### 工作区解析是双实现，改一处必须改两处
 
 `bootstrap.ps1` 顶部的解析块和 `scripts/lib/paths.js` 的 `resolveWorkspace()` 必须同顺序、
@@ -210,9 +219,8 @@ wechat-history 的 check-env.py 用 `importlib.util.find_spec` 查 **import 名*
 | Windows 10 / ARM64 / 离线 | 未覆盖，文档里也没声明不支持 |
 | `G2` 修复源 | 源是宿主 `resources\app\dsh\node_modules` 与 `~/.dsh/plugins`，两者都得先从旧机带过来。真·新机两处皆空时修不了，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
-| verify / MCP 长耗时段无进度（M 段最长 240s） | **没做**（审查建议 #11）。要做得上流式逐段输出 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |
-| MCP `notifications/cancelled` / SIGTERM 优雅退出 | **没做**（审查建议 #13 剩余部分；`isError` 已补） |
+| SIGTERM 优雅退出 | **没做**。progress / cancelled / isError 已补（2026-11-19 第五轮），手动掐断走 cancelled |
 | 00 段与 H 段工作区口径有重叠 | **不合并**（审查建议 #14）。00 查「前置到位」、H 查「内容完整」，各有用途 |
 | winget -1978335212 降级为 ok | **不做**（审查建议 #15）。该分支只在「winget 说装了但命令解析不到」时走到——那是真缺口（多半是 PATH），降级成 ok 就是漏报。只把文案改准了 |
 

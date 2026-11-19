@@ -13,7 +13,7 @@
  *   tool_discover  按 capability 查工具（如 media:probe -> ffprobe）
  *   tool_resolve   给工具名返回绝对路径 + 版本 + 是否在 PATH
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +38,9 @@ function runVerify(only) {
   try {
     return JSON.parse(r.stdout);
   } catch {
-    return { error: 'verify 输出不是合法 JSON', exitCode: r.status, stderr: (r.stderr || '').slice(0, 400) };
+    // 真因多半在 stderr（如「未知检查段: ZZ」），别让「不是合法 JSON」把它埋了（露馅④）
+    const firstErr = (r.stderr || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0];
+    return { error: firstErr || 'verify 输出不是合法 JSON', exitCode: r.status, stderr: (r.stderr || '').slice(0, 400) };
   }
 }
 
@@ -82,13 +84,61 @@ function text(s, isError) {
   return r;
 }
 
-async function callTool(name, args) {
+async function callTool(name, args, msg) {
   const mf = await getManifest();
   if (name === 'env_status') {
     const only = args && args.only ? String(args.only) : '';
     if (only && !/^[A-Za-z0-9,]+$/.test(only)) return text({ error: 'only 只能是段 id，逗号分隔（如 A,G2,00）' }, true);
-    const out = runVerify(only || undefined);
-    return text(out, Boolean(out && out.error));
+    // 一律走异步子进程 + --jsonl：spawnSync 会卡死事件循环，取消永远排不上队
+    // （break-it 露馅② 的根因——无 progressToken 的请求不可取消）。
+    // progressToken 只决定发不发 notifications/progress。
+    const token = args && args._meta && args._meta.progressToken;
+    const wantProgress = token !== undefined && token !== null;
+    return new Promise((resolve) => {
+      // slot 在读循环里就已注册——cancel 可能比 spawn 先到（同 chunk 就是这个次序）
+      const slot = inflight.get(msg.id) || { cancelled: false, child: null };
+      inflight.set(msg.id, slot);
+      if (slot.cancelled) { inflight.delete(msg.id); resolve({ __rpcError: { code: -32800, message: 'request cancelled' } }); return; }
+      const child = spawn(process.execPath, [VERIFY, '--jsonl', ...(only ? ['--only=' + only] : [])]);
+      child.killed = false;
+      child.timedOut = false;
+      // 自管超时：spawn 的 timeout 会 kill 并让 killed=true，跟用户取消混成一谈（code-audit #4）
+      const timer = setTimeout(() => { child.timedOut = true; killTree(child); }, 600000);
+      slot.child = child;
+      let buf = '';
+      let done = null;
+      let segs = 0;
+      // 总数与 verify 同口径：去空段、去重、大小写归一（露馅③ + code-audit #7）
+      const uniq = only ? [...new Set(only.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean))] : null;
+      const total = uniq ? uniq.length : 18;
+      child.stdout.on('data', (d) => {
+        buf += d.toString();
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const lineStr = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!lineStr) continue;
+          let j;
+          try { j = JSON.parse(lineStr); } catch { continue; }
+          if (j.type === 'segment') {
+            segs++;
+            if (wantProgress) notify('notifications/progress', { progressToken: token, progress: segs, total, data: j });
+          } else if (j.type === 'done') {
+            const { type, ...payload } = j;
+            done = payload;
+          }
+        }
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        inflight.delete(msg.id);
+        // 超时、取消、崩溃是三件不同的事，不许都叫 cancelled（code-audit #4）
+        if (child.timedOut) { resolve(text({ error: 'verify 超时（600s）——不是取消，是真跑不完', exitCode: code }, true)); return; }
+        if (child.killed || slot.cancelled) { resolve({ __rpcError: { code: -32800, message: 'request cancelled' } }); return; }
+        if (done) resolve(text(done));
+        else resolve(text({ error: 'verify 输出异常', exitCode: code }, true));
+      });
+    });
   }
   if (name === 'tool_discover') {
     const cap = (args && args.capability) ? String(args.capability).toLowerCase() : '';
@@ -158,6 +208,17 @@ function reply(id, result) {
 function replyErr(id, code, message) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }) + '\n');
 }
+function notify(method, params) {
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n');
+}
+function killTree(child) {
+  // child.kill() 在 Windows 是 TerminateProcess，只杀 verify 自己，它内部的
+  // PowerShell 探针会继续跑完——taskkill /T 连整棵进程树一起收（code-audit #5）
+  try { spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f']); } catch { /* best effort */ }
+  try { child.kill(); } catch { /* already gone */ }
+}
+// 在途请求表：notifications/cancelled 用它找到子进程并掐断（MCP 取消规范）
+const inflight = new Map();
 
 let buf = '';
 process.stdin.on('data', async (chunk) => {
@@ -179,8 +240,22 @@ process.stdin.on('data', async (chunk) => {
       } else if (msg.method === 'tools/list') {
         reply(msg.id, { tools: TOOLS });
       } else if (msg.method === 'tools/call') {
-        const out = await callTool(msg.params && msg.params.name, (msg.params && msg.params.arguments) || {});
-        reply(msg.id, out);
+        // 不 await：读循环必须立刻回到下一行，否则同一 chunk 里排在后面的
+        // notifications/cancelled 要等请求跑完才被处理——同批取消会确定性丢失（露馅②）。
+        // slot 先于 spawn 注册：cancel 可能赶在子进程创建之前到。
+        inflight.set(msg.id, { cancelled: false, child: null });
+        Promise.resolve(callTool(msg.params && msg.params.name, (msg.params && msg.params.arguments) || {}, msg)).then((out) => {
+          inflight.delete(msg.id);
+          if (out && out.__rpcError) replyErr(msg.id, out.__rpcError.code, out.__rpcError.message);
+          else reply(msg.id, out);
+        }).catch((e) => { inflight.delete(msg.id); replyErr(msg.id, -32603, String((e && e.message) || e)); });
+      } else if (msg.method === 'notifications/cancelled') {
+        const rid = msg.params && msg.params.requestId;
+        const slot = inflight.get(rid);
+        if (slot) {
+          slot.cancelled = true;
+          if (slot.child) { slot.child.killed = true; killTree(slot.child); }
+        }
       } else if (msg.method === 'notifications/initialized') {
         // no reply for notifications
       } else if (msg.id !== undefined) {

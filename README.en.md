@@ -68,6 +68,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -App
 
 # 4. plus the dialog-archive scheduled task (optional)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -Apply -WithScheduledTasks
+
+# 5. system tweaks (optional, opt-in per item, fully revertible - see below)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -List
+
+# 6. export a migration inventory (winget + both pips + npm -> ~/.dsh/inventory-*.json)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1 -ExportInventory
 ```
 
 After Node is in place, run the detailed self-check:
@@ -135,6 +141,38 @@ verify.mjs checks this section read-only; bootstrap.ps1's G2 section repairs it 
 
 - **`-split` returns a String, not an array, for a single entry** — `($parts + $dir)` becomes string concatenation and the whole PATH turns into `C:\AAAC:\BBB`, getting worse with every run.
 - **`Set-Content -Encoding ASCII` turns CJK into `?`** — VBS paths with CJK silently break; the autostart dies without a sound.
+
+## System tweaks (optional)
+
+Windows tuning beyond environment completion: **opt-in per item, fully revertible**. The catalog lives in `config/manifest.json` under `tweaks[]`.
+
+| id | what | revert | rights |
+|---|---|---|---|
+| longpaths | LongPathsEnabled=1 (no Win32 path truncation) | set back to 0 | admin |
+| power-highperf | activate the high-performance power plan | switch back to Balanced | normal |
+| gamebar-off | turn off Game Bar background capture (HKCU) | set back to 1 | normal |
+| defender-exclusions | add Defender exclusions for the workspace / DSH dirs | remove the exclusions | admin |
+| hiberfil-off | disable hibernation, free hiberfil.sys | powercfg /hibernate on | admin |
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -List          # probe only, changes nothing
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Apply gamebar-off
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tweaks.ps1 -Revert gamebar-off
+```
+
+When the real state cannot be probed it reports `unknown` and never guesses (e.g. Defender taken over by third-party AV). Admin items stop with FAIL in a non-admin shell instead of forcing the write.
+
+## Migration inventory export
+
+`bootstrap.ps1 -ExportInventory` dumps winget export + pip list for both
+python interpreters + global npm packages into `~/.dsh/inventory-<timestamp>.json` (the winget part goes to a separate
+`inventory-<timestamp>-winget.json`, Microsoft's own migration format). `-InventoryPath` changes the output directory.
+Check a new machine against the list instead of relying on memory.
+
+## Pending-reboot detection
+
+`-Check` / `-Apply` probe three pending-reboot sources (PendingFileRenameOperations / CBS / Windows Update)
+up front and tell you to reboot and re-run — driver-level packages interrupted mid-install are half-broken otherwise.
 
 ## How to undo
 

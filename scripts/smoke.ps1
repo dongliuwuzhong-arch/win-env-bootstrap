@@ -96,7 +96,7 @@ try {
     }
 
     # ---------- 5/5 bootstrap -Check exit code ----------
-    # bootstrap 自己的退出码语义（0/1/2）此前没人验证过，只测了 verify 的。
+    # bootstrap's own exit code semantics (0/1/2) had never been asserted before;
     Head '5/5 bootstrap -Check exit code'
     $bOut = (& powershell -NoProfile -ExecutionPolicy Bypass -File 'scripts/bootstrap.ps1' -Check 2>&1 | Out-String)
     $bCode = $LASTEXITCODE

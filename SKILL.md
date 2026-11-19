@@ -19,7 +19,7 @@ description: 换机第二阶段：在一台 Windows 上把 DSH 日常要用的�
 阶段一没做完，阶段二只能报一堆红——它不代替阶段一。
 
 > 🔧 **要改这个技能**（加检查项、加工具、修判据、查某条检查为什么不生效、或者接手维护）→ 先读 [`MAINTAINING.md`](MAINTAINING.md)。
-> 里面有文件地图、三条铁律（PS 5.1 必须纯 ASCII / 判据必须能跑红 / 改完三验）、八条踩过的坑、以及「哪些还没做」。
+> 里面有文件地图、三条铁律（PS 5.1 必须纯 ASCII / 判据必须能跑红 / 改完三验）、九条踩过的坑、以及「哪些还没做」。
 
 ## 怎么用
 
@@ -47,7 +47,7 @@ node <技能目录>/scripts/verify.mjs
 
 ## 十八类检查
 
-`config/manifest.json` 的 `categories` 是唯一清单，下面 17 行按它逐行排。
+`config/manifest.json` 的 `categories` 是唯一清单，下面 18 行按它逐行排。
 「缺了怎么办」列写的是**脚本实际干的事**，不是打算干的事。
 
 | # | 类别 | 查什么 | 缺了怎么办 |
@@ -227,6 +227,7 @@ PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「
 | `-WithProxy` | 额外生成代理启动器 + 开机自启（需配 `-Apply`） |
 | `-WithScheduledTasks` | 额外注册对话存档计划任务 |
 | `-DedupPath` | 真去重用户 PATH（之前只报告不去重，现在是真做） |
+| `-ExportInventory` | 导出换机清单（winget export + 两套 pip + npm）到 `~/.dsh/inventory-*.json` |
 | `-Workspace <路径>` | 指定工作区，优先级：参数 > `DSH_WORKSPACE` > manifest > 默认 |
 
 退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒（与 `verify.mjs` 一致）。
@@ -235,33 +236,35 @@ PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「
 
 | 参数 | 干什么 |
 |---|---|
-| （无） | 18 类全跑，约 14-15 秒 |
+| （无） | 18 类全跑，约 12~15 秒（视 M 段负载） |
 | `--only=A,G2` | 只跑指定段 |
-| `--no-selfcheck` | 跳过 M 段（dsh-selfcheck 占 ~9 秒），全跑降到 5.6 秒 |
+| `--no-selfcheck` | 跳过 M 段（dsh-selfcheck 数秒，负载高时 ~9 秒），降到约 5~8 秒 |
 
 退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒 / `64` 未知段名。
 
 ### 耗时构成（本机实测）
 
 ```
-17 段并行        5.6s
-M 段 selfcheck   ~9s   <- 大头，是 dsh-selfcheck 自己的成本
-全量            14-15s
+17 段并行        5~8s
+M 段 selfcheck   数秒（高负载 ~9s）   <- 大头，是 dsh-selfcheck 自己的成本
+全量            12~15s
 ```
 
 ## 测试与 CI
 
 ```bash
 cd .agents/skills/dsh-env-bootstrap
-node --test "tests/**/*.test.mjs"     # 108 个契约测试
+node --test "tests/**/*.test.mjs"     # 117 个 node 契约测试
+powershell -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 21 个 Pester（bootstrap 函数直测 + 幂等收敛 + tweaks 探针）
 powershell -File scripts/smoke.ps1    # 一键冒烟
 ```
 
 ⚠️ **Node 22+ 把 `--test` 的位置参数当 glob**，写 `node --test tests/` 会报
 `Could not find 'tests'`，必须用 `node --test "tests/**/*.test.mjs"`。
 
-108 个测试每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
-执行策略空值、Store python 桩、版本号浮点解析、manifest 与 checks 同序、退出码契约）。
+117 个 node 测试 + 21 个 Pester 每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
+执行策略空值、Store python 桩、版本号浮点解析、manifest 与 checks 同序、退出码契约、幂等收敛）。
+Pester 走 PS parser 抽函数直测，不跑脚本主体；测试文件必须带 UTF-8 BOM（锚点钉着）。
 
 ## 首次使用：指定工作区
 
