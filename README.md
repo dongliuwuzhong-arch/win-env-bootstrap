@@ -1,9 +1,11 @@
 # dsh-env-bootstrap
 
-**换机第二阶段：公开工具装齐 + 十七类自检。**
+**换机第二阶段：公开工具装齐 + 十八类自检。**
+
+> 🔧 **要维护或修改它** → 读 [MAINTAINING.md](MAINTAINING.md)（文件地图、三条铁律、踩过的坑、还没做的事）。
 
 DSH（DeepSeek Harness）桌面端的**环境补齐与自检**技能。能自动装的那部分用 winget / pip 装上，
-PATH 缺项自动补，其余只出报告。十七类检查，最后出中文报告。
+PATH 缺项自动补，其余只出报告。十八类检查，最后出中文报告。
 
 > Second stage of a DSH setup on Windows: install the public tools, add missing PATH entries,
 > run 17 categories of checks, print a Chinese report. It does not install DSH itself.
@@ -79,7 +81,7 @@ node scripts/verify.mjs
 
 退出码：0 全过 / 1 有硬缺口 / 2 能跑但有提醒。
 
-## 十七类检查
+## 十八类检查
 
 `config/manifest.json` 的 `categories` 是唯一清单，这张表跟 [SKILL.md](SKILL.md) 的表格逐行一致。
 「缺了怎么办」列写的是脚本实际干的事。
