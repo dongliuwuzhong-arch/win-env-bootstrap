@@ -1,0 +1,257 @@
+{
+  "version": 1,
+  "generated": "2026-11-18",
+  "note": "单一配置源：两个脚本都从这里读工具清单、类别、路径候选。改检查项只改这里。",
+  "workspace": {
+    "default": "",
+    "env": "DSH_WORKSPACE"
+  },
+  "dsh": {
+    "rootCandidates": [
+      "C:\\Software\\DSH",
+      "C:\\Program Files\\DSH"
+    ],
+    "exeName": "DeepSeek Harness.exe",
+    "uninstallKey": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+    "displayNameMatch": "DeepSeek"
+  },
+  "exitCodes": {
+    "ok": 0,
+    "hardGap": 1,
+    "warningOnly": 2
+  },
+  "categories": [
+    {
+      "id": "A",
+      "name": "核心运行时",
+      "desc": "Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm"
+    },
+    {
+      "id": "B",
+      "name": "归档工具",
+      "desc": "7-Zip + 是否在 PATH（User 和 Machine 都查）"
+    },
+    {
+      "id": "C",
+      "name": "媒体工具",
+      "desc": "ffmpeg / ffprobe / yt-dlp / ImageMagick"
+    },
+    {
+      "id": "D",
+      "name": "浏览器自动化",
+      "desc": "Chrome / puppeteer"
+    },
+    {
+      "id": "E",
+      "name": "逆向工具（可选）",
+      "desc": "frida"
+    },
+    {
+      "id": "F",
+      "name": "Python 包",
+      "desc": "系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包"
+    },
+    {
+      "id": "G",
+      "name": "DSH 本体",
+      "desc": "宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容"
+    },
+    {
+      "id": "G2",
+      "name": "插件加载前置",
+      "desc": "junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1"
+    },
+    {
+      "id": "H",
+      "name": "工作区",
+      "desc": "七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码"
+    },
+    {
+      "id": "I",
+      "name": "系统配置",
+      "desc": "PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页"
+    },
+    {
+      "id": "J",
+      "name": "网络",
+      "desc": "本地代理端口"
+    },
+    {
+      "id": "K",
+      "name": "代理与自启",
+      "desc": "启动器 vbs / Run 键"
+    },
+    {
+      "id": "L",
+      "name": "脚本可跑性",
+      "desc": "check-paths / check-skills / persona-lint / check-persona-context"
+    },
+    {
+      "id": "M",
+      "name": "总检",
+      "desc": "调 dsh-selfcheck，退出码 0 才算过"
+    },
+    {
+      "id": "N",
+      "name": "技能级可选依赖",
+      "desc": "exiftool / dotnet / youtube-transcript / ChatTrace / TTS 端点"
+    },
+    {
+      "id": "O",
+      "name": "系统环境",
+      "desc": "Defender / w32time / 中文字体 / LongPaths / 磁盘"
+    },
+    {
+      "id": "P",
+      "name": "环境完整性与迁移",
+      "desc": "端口 / 单实例 / 根证书 CA / 工作区 ACL / DSH_WE_DATA_DIR / AGENTS.md / 自启 vbs"
+    }
+  ],
+  "tools": [
+    {
+      "name": "node",
+      "versionArgs": [
+        "--version"
+      ],
+      "minMajor": 24,
+      "winget": "OpenJS.NodeJS.LTS",
+      "optional": false
+    },
+    {
+      "name": "python",
+      "versionArgs": [
+        "--version"
+      ],
+      "minMinor": 12,
+      "winget": "Python.Python.3.12",
+      "optional": false,
+      "fallback": "python3"
+    },
+    {
+      "name": "git",
+      "versionArgs": [
+        "--version"
+      ],
+      "winget": "Git.Git",
+      "optional": true
+    },
+    {
+      "name": "curl.exe",
+      "versionArgs": [
+        "--version"
+      ],
+      "optional": true,
+      "note": "PS 5.1 里 curl 是 Invoke-WebRequest 的别名"
+    },
+    {
+      "name": "winget",
+      "versionArgs": [
+        "--version"
+      ],
+      "optional": true
+    },
+    {
+      "name": "pnpm",
+      "versionArgs": [
+        "--version"
+      ],
+      "optional": true,
+      "note": "DSH 自带一份，系统没有不算缺口"
+    },
+    {
+      "name": "7z",
+      "versionArgs": [],
+      "optional": false,
+      "pathDirs": [
+        "C:\\Software\\7-Zip",
+        "C:\\Program Files\\7-Zip",
+        "C:\\Program Files (x86)\\7-Zip"
+      ],
+      "exeName": "7z.exe"
+    },
+    {
+      "name": "ffmpeg",
+      "versionArgs": [
+        "-version"
+      ],
+      "winget": "Gyan.FFmpeg",
+      "optional": true
+    },
+    {
+      "name": "ffprobe",
+      "versionArgs": [
+        "-version"
+      ],
+      "optional": true
+    },
+    {
+      "name": "yt-dlp",
+      "versionArgs": [
+        "--version"
+      ],
+      "winget": "yt-dlp.yt-dlp",
+      "optional": true
+    },
+    {
+      "name": "magick",
+      "versionArgs": [
+        "-version"
+      ],
+      "winget": "ImageMagick.ImageMagick",
+      "optional": true,
+      "note": "convert 在 Windows 会撞系统磁盘工具"
+    },
+    {
+      "name": "frida",
+      "versionArgs": [
+        "--version"
+      ],
+      "pip": "frida-tools",
+      "optional": true
+    },
+    {
+      "name": "exiftool",
+      "versionArgs": [
+        "-ver"
+      ],
+      "optional": true
+    },
+    {
+      "name": "dotnet",
+      "versionArgs": [
+        "--version"
+      ],
+      "optional": true
+    }
+  ],
+  "g2": {
+    "junctionPackage": "dsh-compaction-basic",
+    "manualPackages": [
+      "cosmokit",
+      "dsh-compaction",
+      "dsh-compaction-basic",
+      "dsh-compaction-tool-result-pruner",
+      "schemastery"
+    ],
+    "localPlugins": [],
+    "localPluginsNote": "填你自己的本地插件名（从 ~/.dsh/plugins 拷到 profile 的那些）。留空则跳过这项检查。",
+    "hostNodeModulesRel": "resources\\app\\dsh\\node_modules",
+    "winBashPayloadRel": "@linxin666\\dsh-win-bash\\runtime\\win32-x64",
+    "uvBundledRel": "@dataiku\\uv-win32-x64\\bin\\uv.exe"
+  },
+  "workspaceDirs": [
+    "tools",
+    "_tools",
+    "knowledge",
+    "reports",
+    "对话存档",
+    "_diag",
+    "archives"
+  ],
+  "personaFiles": [
+    "SOUL.md",
+    "IDENTITY.md",
+    "USER.md",
+    "MEMORY.md"
+  ]
+}

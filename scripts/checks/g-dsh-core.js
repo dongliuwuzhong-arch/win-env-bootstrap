@@ -1,0 +1,47 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { ok, warn, bad } from '../lib/report.js';
+
+export const id = 'G';
+export const title = 'DSH 本体';
+
+export async function check(ctx) {
+  const out = [];
+  const join = ctx.pathJoin;
+
+  const dshExe = ctx.firstExisting(['C:\\Software\\DSH\\DeepSeek Harness.exe', 'C:\\Program Files\\DSH\\DeepSeek Harness.exe']);
+  if (dshExe) out.push(ok('宿主: ' + dshExe));
+  else out.push(bad('DSH 宿主未找到'));
+
+  const DSH_ROOT = ctx.DSH_ROOT;
+  const appPkg = DSH_ROOT ? join(DSH_ROOT, 'resources', 'app', 'package.json') : '';
+  if (ctx.exists(appPkg)) {
+    try { out.push(ok('解包树版本: ' + JSON.parse(fs.readFileSync(appPkg, 'utf8')).version)); }
+    catch { out.push(warn('解包树 package.json 读不了')); }
+  } else out.push(warn('解包树不存在（宿主可能还在读 asar）'));
+
+  if (ctx.exists(ctx.DSH_HOME)) out.push(ok('.dsh: ' + ctx.DSH_HOME));
+  else out.push(bad('.dsh 不存在'));
+
+  const profPkg = join(ctx.DSH_HOME, 'profiles', 'desktop', 'package.json');
+  if (ctx.exists(profPkg)) {
+    try {
+      const j = JSON.parse(fs.readFileSync(profPkg, 'utf8'));
+      const n = (j.dsh?.profile?.bundles || []).length;
+      out.push(ok('profile bundles: ' + n));
+    } catch { out.push(warn('profile package.json 解析失败')); }
+  } else out.push(warn('profiles/desktop/package.json 不存在'));
+
+  if (ctx.exists(join(ctx.DSH_HOME, '.credentials.yaml'))) out.push(ok('.credentials.yaml 在'));
+  else out.push(warn('.credentials.yaml 不存在（要填 API key）'));
+
+  // DSH CLI shim：丢了 dsh 命令行入口就没了，但报告会显示全过
+  const cliBin = DSH_ROOT ? join(DSH_ROOT, 'resources', 'runtime', 'cli', 'bin') : '';
+  if (ctx.exists(cliBin)) {
+    const up = ctx.sys().env.userPath;
+    const inUserPath = Boolean(up) && up.split(';').some((e) => e.trim().toLowerCase() === cliBin.toLowerCase());
+    if (inUserPath) out.push(ok('DSH CLI shim 在用户 PATH'));
+    else out.push(warn('DSH CLI shim 不在用户 PATH（dsh 命令入口没了）', 'bootstrap -Apply 补 PATH'));
+  } else out.push(warn('DSH CLI bin 目录不存在'));
+  return out;
+}

@@ -1,0 +1,16 @@
+# 备份与临时件
+*.bak
+*.bak-*
+*~
+
+# 日志
+*.log
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/

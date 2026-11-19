@@ -1,0 +1,98 @@
+name: ci
+
+# dsh-env-bootstrap 的 CI：契约测试 + 语法 + 只读自检。
+# 绝不跑 bootstrap -Apply —— 那会真装软件、真改 PATH，CI 机器不该被改。
+#
+# 路径说明：本文件放在技能目录内（<skill>/.github/workflows/ci.yml）。
+#   - 技能目录本身是仓库根时：SKILL_ROOT = .
+#   - 把它挪到 <repo>/.github/workflows/ci.yml 时：SKILL_ROOT = .agents/skills/dsh-env-bootstrap
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SKILL_ROOT: .
+
+jobs:
+  windows:
+    name: windows-latest / node ${{ matrix.node }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24']
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Node 版本自检
+        run: node --version
+
+      # Node 22+ 把 --test 的位置参数当 GLOB，不是目录。
+      # 'node --test tests/' 会报 Could not find，必须用 glob。
+      - name: 契约测试（node --test）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          node --test 'tests/**/*.test.mjs'
+
+      - name: 语法检查（node --check）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          $files = @(Get-ChildItem -Path scripts -Recurse -File -Include '*.mjs', '*.js')
+          $files += @(Get-ChildItem -Path tests -File -Filter '*.mjs')
+          $bad = 0
+          foreach ($f in $files) {
+            node --check $f.FullName
+            if ($LASTEXITCODE -ne 0) {
+              $bad++
+              Write-Host "::error file=$($f.Name)::node --check failed"
+            }
+          }
+          Write-Host "node --check: $($files.Count) file(s), $bad failed"
+          if ($bad -gt 0) { exit 1 }
+
+      - name: 语法检查（PowerShell Parser）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          $bad = 0
+          foreach ($f in @('scripts/bootstrap.ps1', 'scripts/smoke.ps1')) {
+            $errs = $null
+            $full = (Resolve-Path -LiteralPath $f).Path
+            [void][System.Management.Automation.Language.Parser]::ParseFile($full, [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count -gt 0) {
+              $bad++
+              foreach ($e in $errs) {
+                Write-Host "::error file=$f,line=$($e.Extent.StartLineNumber)::$($e.Message)"
+              }
+            } else { Write-Host "parser ok: $f" }
+          }
+          if ($bad -gt 0) { exit 1 }
+
+      # 只读：-Check 不装任何东西。
+      # 0 = 无缺口 / 1 = 有硬缺口（CI 机器没装 DSH 本体，属正常）/ 其它 = 脚本自己崩了。
+      - name: bootstrap -Check（只读，断言退出码）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -Check
+          $code = $LASTEXITCODE
+          Write-Host "bootstrap -Check exit = $code"
+          if ($code -ne 0 -and $code -ne 1) {
+            Write-Host "::error::bootstrap -Check 退出码 $code，不是 0/1"
+            exit 1
+          }
+
+      # 本地一键冒烟也在 CI 里跑一遍：保证这条入口不是只在作者机器上能跑。
+      - name: smoke.ps1（一键冒烟）
+        run: |
+          Set-Location $env:SKILL_ROOT
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1

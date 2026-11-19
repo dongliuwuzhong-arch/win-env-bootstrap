@@ -1,0 +1,274 @@
+---
+name: dsh-env-bootstrap
+description: 换机第二阶段：在一台 Windows 上把 DSH 日常要用的公开工具装齐并自检（前提是本体已装、工作区已拷）。说「装环境」「换电脑」「新机器」「环境没配」「bootstrap」「一键配环境」时触发。十七类检查。能自动装的只有一部分，其余只报告；PATH 缺项自动补，重复项只报告。不装 DSH 本体、不建 ~/.dsh 目录树；G2 能修，前提是源文件已拷过来。
+---
+
+# dsh-env-bootstrap · 新机环境一次装齐
+
+> 2026-11-18 建。源头是这台机器上反复踩的环境坑，以及四个验证子代理挖出来的漏项。
+> 定位：**两台机器之间那一段**。不是「裸 Windows 跑完就能干活」，是「本体装好、工作区拷好之后，
+> 把周围一圈公开工具补齐并自检」。
+
+## 两阶段：谁负责哪一段
+
+| 阶段 | 谁做 | 内容 |
+|---|---|---|
+| **一（前提）** | 人 + 官方安装器 | 装 DSH 本体；拷工作区目录和 `~/.dsh\`（含 `profiles\desktop\node_modules`）；填 `.credentials.yaml` |
+| **二（本技能）** | `bootstrap.ps1` + `verify.mjs` | 装齐公开工具、补 PATH 缺项、修 G2 加载前置、跑 17 类自检出中文报告 |
+
+阶段一没做完，阶段二只能报一堆红——它不代替阶段一。
+
+## 怎么用
+
+```powershell
+# 只探测，不改任何东西
+powershell -NoProfile -ExecutionPolicy Bypass -File <技能目录>\scripts\bootstrap.ps1 -Check
+
+# 装缺失的 + 配 PATH
+powershell -NoProfile -ExecutionPolicy Bypass -File <技能目录>\scripts\bootstrap.ps1 -Apply
+
+# 再加代理启动器和开机自启
+powershell -NoProfile -ExecutionPolicy Bypass -File <技能目录>\scripts\bootstrap.ps1 -Apply -WithProxy
+
+# 再加对话存档计划任务
+powershell -NoProfile -ExecutionPolicy Bypass -File <技能目录>\scripts\bootstrap.ps1 -Apply -WithScheduledTasks
+```
+
+装完 Node 之后跑详细自检：
+
+```bash
+node <技能目录>/scripts/verify.mjs
+```
+
+退出码：`0` 全过 / `1` 有硬缺口 / `2` 能跑但有提醒。
+
+## 十七类检查
+
+`config/manifest.json` 的 `categories` 是唯一清单，下面 17 行按它逐行排。
+「缺了怎么办」列写的是**脚本实际干的事**，不是打算干的事。
+
+| # | 类别 | 查什么 | 缺了怎么办 |
+|---|---|---|---|
+| A | **核心运行时** | Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm | winget 装 Node、Python、Git；pnpm 先认 DSH 自带那份，没有才 `npm i -g`；**curl.exe / winget 只提示** |
+| B | **归档工具** | 7-Zip + 是否在 PATH（User 和 Machine 都查） | winget 装；装了但不在 PATH 就追加（改前备份到 `~/.dsh`，备份失败则不动） |
+| C | **媒体工具** | ffmpeg / ffprobe / yt-dlp / ImageMagick | ffmpeg、yt-dlp 走 winget；**ffprobe、ImageMagick 只检查不装**（`convert` 会撞系统磁盘工具） |
+| D | **浏览器自动化** | Chrome / puppeteer | Chrome 走 winget；**puppeteer 只提示**，自己去 `_tools/browser` 里 `npm i` |
+| E | **逆向工具（可选）** | frida | **只提示，不装** |
+| F | **Python 包** | 系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包 | pillow / pyyaml 走 pip 装；**wechat 那 4 个、DSH 自带 python 的 5 个只检查** |
+| G | **DSH 本体** | 宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容 / CLI shim 在不在 PATH | **只检查**——官方安装器的事 |
+| G2 | **插件加载前置** | junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1 | **会修**（`-RepairG2`，`-Apply` 隐含）：从宿主拷 5 个手工包（`dsh-compaction-basic` 建 junction）、从 `~/.dsh/plugins` 拷 4 个本地插件、缺凭据时写注释模板；**win-bash payload、soul schema、宿主缺失只提示** |
+| H | **工作区** | 七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码 | 缺目录 `-Apply` 自动建；人格、技能库只检查 |
+| I | **系统配置** | PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页 | 执行策略 Restricted\|AllSigned 自动改 CurrentUser RemoteSigned；**PATH 重复项只报告，不去重**；计划任务只在 `-WithScheduledTasks` 时注册；代码页只提示 |
+| J | **网络** | 本地代理端口 7897 | 只提示（不开也能用） |
+| K | **代理与自启** | 启动器 vbs / Run 键 | `-WithProxy` 生成 vbs 并写 Run 键 |
+| L | **脚本可跑性** | check-paths / check-skills / persona-lint / check-persona-context | 只报哪个挂了、退出码多少 |
+| M | **总检** | 调 `dsh-selfcheck`，**退出码 0 才算过**（文案只作摘要） | 只报 |
+| N | **技能级可选依赖** | exiftool / dotnet / youtube-transcript 的 node_modules / osint 依赖 / playwright / agent-reach / ChatTrace / TTS 端点 | 全是 info，不阻断，不装 |
+| O | **系统环境** | Defender / w32time / 中文字体 / LongPaths / 磁盘余量 | 只报（时间偏移会让 HTTPS 证书校验失败） |
+| P | **环境完整性与迁移** | 端口 / 单实例 / 根证书 CA / 工作区 ACL / DSH_WE_DATA_DIR / AGENTS.md / 自启 vbs | 只报——迁移时会带毒的东西 |
+
+## 哪些是真装，哪些只报告
+
+`bootstrap.ps1 -Apply` 真会装的，就这些：
+
+```
+Node · Python · Git（可选）· pnpm（npm -g）· 7-Zip（+PATH）· ffmpeg · yt-dlp · Chrome
+pillow · pyyaml
+G2 修复（-RepairG2 / -Apply）：dsh-compaction-basic junction · 4 个手工包拷贝
+                                  · 4 个本地插件拷贝 · .credentials.yaml 注释模板
+```
+
+单点自动改的，就这几处：
+
+```
+PATH 缺项追加（先备份） · 执行策略 Restricted|AllSigned → CurrentUser RemoteSigned
+-WithProxy 写启动器 + Run 键 · -WithScheduledTasks 注册 DSH-DialogArchive
+```
+
+其余全部**只报告**：ffprobe / ImageMagick / frida / puppeteer / wechat 的 pip 包 /
+DSH 自带 python 的包 / N / O / P，以及 PATH 重复项（去重要手工）。
+G2 里只有「手工包 + 本地插件 + 凭据模板」会修，win-bash payload、soul schema、宿主缺失仍然只提示。
+`verify.mjs` 一个字节都不改系统——它只写一个临时探针文件试可写性，然后删掉。
+
+## 换机最容易漏的（G2 段专门查这些）
+
+这些不是「功能缺失」，是**加载期直接 throw**，DSH 起来就是三个预设全挂。
+`verify.mjs` 只读查这一段，`bootstrap.ps1` 的 G2 段带修复（`-RepairG2`，`-Apply` 隐含）。
+**修的前提是源文件在**：宿主的 `resources\app\dsh\node_modules` 和 `~/.dsh/plugins` 得先拷过来，缺源只报红。
+
+1. **`@deepseek-ai/dsh-compaction-basic` 的版本必须和宿主那份一致**。
+   不一致 `compactNow` 可能就没了。junction 指向宿主是最稳的形态（实测 `isSymbolicLink() = true`
+   → `C:\Software\DSH\resources\app\dsh\node_modules\@deepseek-ai\dsh-compaction-basic`），
+   但**目录拷贝也能跑**，所以脚本只把「版本不一致」判红、把「不是 junction」记成 info。
+   新机跑 `pnpm install` 造不出这个 junction，而多个预设都挂了某个插件的压缩后端。
+2. **profile 里 `@deepseek-ai/` 下 5 个包全是手工放的**（cosmokit / dsh-compaction / dsh-compaction-basic /
+   dsh-compaction-tool-result-pruner / schemastery），不在 `dependencies` 里，`pnpm install` 不会补。
+3. **`~/.dsh/plugins/` 的 4 个本地插件是拷贝不是符号链接**（`lstat().isSymbolicLink() = false`）。
+   改源码不生效要重装；反过来，只拷 `~/.dsh/` 不带 `node_modules` 时四个全缺。
+4. **会改宿主文件的插件要能写宿主安装目录**。装在 Program Files 且非管理员时，
+   补丁一条都落不下去。
+5. **用 SQLite 的插件有 schema 版本硬门**。库里 `PRAGMA user_version` 高于插件支持的值会直接 throw。
+
+静默哑掉（不报错，功能没了）：WorkBuddy App 未登录、ffmpeg 缺失（WE 抽帧）、
+WE 本体未装（空列表）、`OPENCODE_GO_API_KEY` 没设、PS 5.1 被卸（toast 失败）、
+TTS 外网 WSS 不通、bridge-next 的 uv/15 个 pip 包缺。
+
+## 它不解决什么
+
+- **不装 DSH 本体**。官方安装器的事，装完再跑这个。
+- **不建 `~/.dsh` 目录树**。profile、插件都是拷过来的，缺了脚本只报红；唯一往里写的是
+  已存在目录里的 `.credentials.yaml` 注释模板。
+- **不拷工作区目录和 `profiles\desktop\node_modules`**。手工搬，漏了就是三个预设全挂。
+- **不填 `.credentials.yaml`**。缺文件时写一份**只有注释、没有任何值**的模板，key 得自己填。
+- **G2 修不了没有源的东西**。手工包要从宿主 `node_modules` 拷，本地插件要从 `~/.dsh/plugins` 拷；
+ 源不在就只报红。win-bash payload 只给指引，soul schema 只读不动数据。
+- **大部分缺项只报告**：ffprobe、ImageMagick、frida、puppeteer、wechat 的 pip 包、
+  DSH 自带 python 的包、N/O/P 三段。想装得自己装。
+- **PATH 只补不删**。重复项只报告，去重手工。
+- **不动 `~/.dsh\storages`、`~/.dsh\sessions`**。宿主数据，只读。
+- **不改系统代理**。实测鲜牛等加速器会抢 `ProxyEnable`（改成 1 后 500ms 内被压回 0），
+  所以只给 DSH 单独挂代理启动器，不碰全局。
+- **不装 MSYS 缺失的 which/df/du**。Git Bash 精简版的天生缺口，用替代命令。
+
+## 这台机器实测的环境缺口（2026-11-18）
+
+| 项 | 状态 | 处理 |
+| --- | --- | --- |
+| Node v24.22.1 / DSH 自带 24.21.0 | ✅ | — |
+| Python 3.12.10（系统）/ 3.12.14（DSH 自带） | ✅ | 两套包不同，要分开查 |
+| pnpm | ✅ DSH 自带 11.28.5 | 系统没有不算缺口 |
+| 7-Zip 26.03 | ⚠️ 装了但不在 PATH | 已补（`Add-PathEntry`） |
+| ffmpeg / ffprobe | ✅ | — |
+| yt-dlp | ❌ 原本没有 | 已 pip 装 |
+| frida | ❌ 原本没有 | 手工装 17.27.0；**脚本不装** |
+| ImageMagick | ❌ 没有，且 `convert` 撞系统磁盘工具 | **未装；脚本只查不装** |
+| `which` `df` `du` `od` `sha256sum` `stat` `wget` `rg` `jq` | ❌ MSYS bash 没有 | 不装，用替代命令 |
+| PATH 重复项 | ⚠️ DSH cli bin 出现两次 | **只报告，不修**，去重手工 |
+| 控制台代码页 | 936（GBK） | 不影响功能，脚本零非 ASCII |
+
+## 踩过的坑（脚本里都处理了）
+
+1. **`$args` 是 PowerShell 自动变量** —— 当函数参数名用，`& $exe $args` 变数组展开，node/python/curl 全误报「not found」。
+2. **`curl` 在 PS 5.1 里是 `Invoke-WebRequest` 的别名** —— 必须写 `curl.exe`。
+3. **中文字面量在 `-File` 模式下会乱码** —— 含中文的路径被读成乱码。脚本里零非 ASCII，用 `[char]0x7A7A + [char]0x95F4` 码点拼。
+4. **`Get-Command python` 返回数组**（python 和 python3 两个）—— 必须 `Select-Object -First 1`。
+5. **`.cmd`/`.bat` 不能用 `execFileSync` 直调** —— Node 里要 `shell: true`。
+6. **`$env:TEMP` 在 `-File` 模式下可能是空的** —— 备份路径用固定位置。
+7. **MSYS bash 会把反斜杠吃掉** —— 传路径给 node 用正斜杠。
+8. **加速器会抢系统代理** —— 只给目标程序单独挂代理。
+9. **自启路径必须 ASCII** —— 注册表存中文路径会坏。
+10. **`-split` 只返回一条时是 String 不是数组** —— `($parts + $dir)` 做字符串拼接，整条 PATH 糊成 `C:\AAAC:\BBB`，且每跑一次更烂。必须 `@()` 包裹。
+11. **`Set-Content -Encoding ASCII` 写中文变 `?`** —— VBS 路径含中文就静默失效，要 UTF8。
+12. **`-or $out` 会把报错当已装** —— Microsoft Store 的 python stub 退出码 9009、stderr 打 "Python was not found"，被当成 `[ OK ] python Python was not found...`。
+13. **`Get-ExecutionPolicy -Scope CurrentUser` 常是 `Undefined`** —— 要读生效值，否则 LocalMachine=Restricted 时报 OK 但实际全被挡。
+14. **`Test-PathEntry` 只查 User 会误报** —— 7-Zip 选 "for all users" 时只写机器级 PATH。
+15. **`convert` 在 Windows 上命中系统磁盘工具** —— ImageMagick 缺失时 `image_*.py` 会把图片参数喂给 `C:\Windows\system32\convert.exe`，不报错、跑错程序。必须查 `magick`。
+16. **DSH 自带 pnpm / python，系统没有不算缺口** —— 运行时在 `resources/runtime/primary-runtime/dependencies/`，`runtime.json` 写明版本和包清单。
+17. **`run()` 不能把「非零退出」当「没装」** —— 很多 CLI 的 `--version` 返回非 0；要区分 `ENOENT`（真没装）和「装了但报错」。
+
+## 换机完整流程
+
+```
+1. 官方安装器装 DSH 本体                       ← 阶段一，本技能不管
+2. 拷工作区目录和 ~/.dsh\ 过来（含 profiles/desktop/node_modules）
+3. bootstrap.ps1 -Check        看缺什么
+4. bootstrap.ps1 -Apply        装齐能装的 + 补 PATH 缺项 + 修 G2
+5. verify.mjs                  确认十七类（重点看 G2 和 P：G2 能修但要有源，P 只查）
+6. 重启 DSH（用生成的启动器）
+```
+
+⚠️ **第 2 步别漏 `profiles/desktop/node_modules`** —— 那 5 个 `@deepseek-ai` 手工包和 4 个本地插件
+都不在 `dependencies` 里，`pnpm install` 补不回来。漏了就是三个预设全挂。
+
+## 为什么引导层用 PowerShell 而不是 Node
+
+**鸡生蛋**：新机器没有 Node，Node 脚本跑不起来。
+PowerShell 5.1 是 Windows 10/11 自带的，所以引导层必须是它。
+装完 Node 之后，详细检查才交给 `verify.mjs`（中文报告、JSON 处理都方便得多）。
+
+## 怎么退
+
+脚本会写四类持久化改动，都能撤：
+
+| 改动 | 怎么撤 |
+|---|---|
+| 用户 PATH | 每次 `-Apply` 前备份到 `~/.dsh/path-backup-*.txt`，覆盖回去即可 |
+| `HKCU\...\Run\DSH` | `Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name DSH` |
+| 计划任务 `DSH-DialogArchive` | `Unregister-ScheduledTask -TaskName DSH-DialogArchive -Confirm:$false` |
+| G2 修复产物 | `profiles\desktop\node_modules` 下新建的 junction / 拷贝的包删掉即可；脚本只补缺，已有的一律跳过 |
+
+PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「以为备份了其实没有」。
+
+## 第二轮验证补的坑（18-24）
+
+18. **`-Encoding UTF8` 写的 .vbs 被 wscript 拒绝** —— PS 5.1 会写 BOM，而 WSH 只认 ANSI 或 UTF-16LE。实测 UTF8BOM 报「Microsoft VBScript 编译错误: 无效字符」，必须用 `-Encoding Unicode`。
+19. **`fs.accessSync(W_OK)` 在 Windows 上不查 ACL** —— 它只读只读属性位，`C:/Program Files/WindowsApps` 也返回 WRITABLE。判断可写必须实际写一个临时文件再删。
+20. **`Get-ExecutionPolicy` 在带 `-ExecutionPolicy Bypass` 的进程里永远返回 Bypass** —— Process 作用域优先级最高，这条检查会永远通过。要读注册表里的持久化值。
+21. **junction 不是硬要求** —— `compaction.js` 只要求「能解析到 + compactNow 是函数」，同版本目录拷贝也能跑。真正的判据是**版本与宿主一致**。
+22. **profile 目录名必须匹配 `^[a-zA-Z0-9_-]{1,80}$`** —— 叫「工作」之类部分插件加载即 throw。
+23. **win-bash 自带 16 MB MSYS payload** —— 挂载前校验 `checksums.sha256`，不一致直接拒绝挂载。它是工作区主力 shell，挂了是断手断脚。缓存目录 `~/.dsh/win-bash` 必须可写。
+24. **bridge-next 用包内自带的 uv**（`@dataiku/uv-win32-x64`），系统 PATH 有没有不是关键。
+
+## 参数速查（2026-11-19 补）
+
+### bootstrap.ps1
+
+| 参数 | 干什么 |
+|---|---|
+| `-Check` | 只探测，不改任何东西（默认） |
+| `-Apply` | 装缺失的 + 配 PATH（隐含 `-RepairG2`） |
+| `-RepairG2` | 只修插件加载前置：5 个手工包 / junction / 4 个本地插件 / 凭据模板 |
+| `-WithProxy` | 额外生成代理启动器 + 开机自启（需配 `-Apply`） |
+| `-WithScheduledTasks` | 额外注册对话存档计划任务 |
+| `-DedupPath` | 真去重用户 PATH（之前只报告不去重，现在是真做） |
+| `-Workspace <路径>` | 指定工作区，优先级：参数 > `DSH_WORKSPACE` > manifest > 默认 |
+
+退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒（与 `verify.mjs` 一致）。
+
+### verify.mjs
+
+| 参数 | 干什么 |
+|---|---|
+| （无） | 17 类全跑，约 14-15 秒 |
+| `--only=A,G2` | 只跑指定段 |
+| `--no-selfcheck` | 跳过 M 段（dsh-selfcheck 占 ~9 秒），全跑降到 5.6 秒 |
+
+退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒 / `64` 未知段名。
+
+### 耗时构成（本机实测）
+
+```
+17 段并行        5.6s
+M 段 selfcheck   ~9s   <- 大头，是 dsh-selfcheck 自己的成本
+全量            14-15s
+```
+
+## 测试与 CI
+
+```bash
+cd .agents/skills/dsh-env-bootstrap
+node --test "tests/**/*.test.mjs"     # 76 个契约测试
+powershell -File scripts/smoke.ps1    # 一键冒烟
+```
+
+⚠️ **Node 22+ 把 `--test` 的位置参数当 glob**，写 `node --test tests/` 会报
+`Could not find 'tests'`，必须用 `node --test "tests/**/*.test.mjs"`。
+
+76 个测试每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
+执行策略空值、Store python 桩、版本号浮点解析、manifest 与 checks 同序、退出码契约）。
+
+## 首次使用：指定工作区
+
+公开仓库里**不写死任何人的工作区路径**。第一次跑之前，用下面任一方式告诉它工作区在哪：
+
+```powershell
+# 方式一：环境变量（推荐，一次设好）
+[Environment]::SetEnvironmentVariable('DSH_WORKSPACE', 'D:\你的工作区', 'User')
+
+# 方式二：每次传参
+.\scripts\bootstrap.ps1 -Check -Workspace 'D:\你的工作区'
+```
+
+优先级：`-Workspace` 参数 > `DSH_WORKSPACE` 环境变量 > `config/manifest.json` 的 `workspace.default`。
+
+没设的话 H 段会报「工作区不存在」——这是提示，不是 bug。
