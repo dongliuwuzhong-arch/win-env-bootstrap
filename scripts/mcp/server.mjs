@@ -30,20 +30,6 @@ async function getManifest() {
   return manifest;
 }
 
-// 跑 verify --json 拿结构化体检结果。不传 --only 就是全量。
-function runVerify(only) {
-  const args = [VERIFY, '--json'];
-  if (only) args.push('--only=' + only);
-  const r = spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 240000, maxBuffer: 16 * 1024 * 1024 });
-  try {
-    return JSON.parse(r.stdout);
-  } catch {
-    // 真因多半在 stderr（如「未知检查段: ZZ」），别让「不是合法 JSON」把它埋了（露馅④）
-    const firstErr = (r.stderr || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0];
-    return { error: firstErr || 'verify 输出不是合法 JSON', exitCode: r.status, stderr: (r.stderr || '').slice(0, 400) };
-  }
-}
-
 const TOOLS = [
   {
     name: 'env_status',
@@ -106,8 +92,10 @@ async function callTool(name, args, msg) {
       const timer = setTimeout(() => { child.timedOut = true; killTree(child); }, 600000);
       slot.child = child;
       let buf = '';
+      let errBuf = '';
       let done = null;
       let segs = 0;
+      child.stderr.on('data', (d) => { errBuf += d.toString(); });
       // 总数与 verify 同口径：去空段、去重、大小写归一（露馅③ + code-audit #7）
       const uniq = only ? [...new Set(only.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean))] : null;
       const total = uniq ? uniq.length : 18;
@@ -136,7 +124,11 @@ async function callTool(name, args, msg) {
         if (child.timedOut) { resolve(text({ error: 'verify 超时（600s）——不是取消，是真跑不完', exitCode: code }, true)); return; }
         if (child.killed || slot.cancelled) { resolve({ __rpcError: { code: -32800, message: 'request cancelled' } }); return; }
         if (done) resolve(text(done));
-        else resolve(text({ error: 'verify 输出异常', exitCode: code }, true));
+        else {
+          // 真因多半在 stderr（如「未知检查段: ZZ」），别让泛化错误把它埋了（露馅④）
+          const firstErr = errBuf.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0];
+          resolve(text({ error: firstErr || 'verify 输出异常', exitCode: code }, true));
+        }
       });
     });
   }
@@ -144,7 +136,8 @@ async function callTool(name, args, msg) {
     const cap = (args && args.capability) ? String(args.capability).toLowerCase() : '';
     const kw = (args && args.keyword) ? String(args.keyword).toLowerCase() : '';
     const all = (mf && mf.tools) || [];
-    const hit = all.filter((t) => {
+    // 无过滤条件时返回全量并带 usage，别回一个 matched:0 让人以为清单是空的（审计 P3-2）
+    const hit = (!cap && !kw) ? all : all.filter((t) => {
       const capHit = cap && String(t.capability || '').toLowerCase().includes(cap);
       const kwHit = kw && [t.name, t.consumer, t.capability, t.degradedBehavior].some((x) => String(x || '').toLowerCase().includes(kw));
       return capHit || kwHit;
@@ -266,4 +259,12 @@ process.stdin.on('data', async (chunk) => {
     }
   }
 });
-process.stdin.on('end', () => process.exit(0));
+// SIGTERM / stdin 关闭都先把在途 verify 子进程树收掉再退（审计 P3-7）
+function shutdown() {
+  for (const slot of inflight.values()) {
+    if (slot && slot.child) { slot.child.killed = true; killTree(slot.child); }
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.stdin.on('end', shutdown);

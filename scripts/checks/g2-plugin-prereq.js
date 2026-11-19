@@ -27,7 +27,10 @@ export async function check(ctx) {
   // 1) 这 5 个 @deepseek-ai 包不在 package.json dependencies 里，是手工放进 profile 的。
   //    其中 dsh-compaction-basic 必须是 junction 指向宿主那份，否则三个预设里的
   //    某个插件的压缩后端在加载期就 throw —— 挂它的预设一起死。
-  const manualPkgs = ['cosmokit', 'dsh-compaction', 'dsh-compaction-basic', 'dsh-compaction-tool-result-pruner', 'schemastery'];
+  // manifest.g2.manualPackages 是单一配置源（写死清单会在改 manifest 后行为分叉，审计 P1-2）
+  const manualPkgs = (ctx.manifest && ctx.manifest.g2 && ctx.manifest.g2.manualPackages && ctx.manifest.g2.manualPackages.length)
+    ? ctx.manifest.g2.manualPackages : ['cosmokit', 'dsh-compaction', 'dsh-compaction-basic', 'dsh-compaction-tool-result-pruner', 'schemastery']
+  ;
   const missingManual = [];
   for (const pkg of manualPkgs) {
     const dir = join(profNM, '@deepseek-ai', pkg);
@@ -188,19 +191,13 @@ export async function check(ctx) {
     // 逐行扫，只留布尔结果：凭据不整文件进内存，也绝不打印内容
     let hasKey = false;
     try {
-      const fd = fs.openSync(credPath, 'r');
-      try {
-        const buf = Buffer.alloc(4096);
-        let carry = '';
-        let n;
-        while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
-          const chunk = carry + buf.toString('utf8', 0, n);
-          if (chunk.includes('OPENCODE_GO_API_KEY')) { hasKey = true; break; }
-          carry = chunk.slice(-64);
-        }
-      } finally { fs.closeSync(fd); }
-      if (hasKey) out.push(ok('凭据含 OPENCODE_GO_API_KEY'));
-      else out.push(bad('凭据里没有 OPENCODE_GO_API_KEY —— 默认模型通道起不来（文件在≠key在）'));
+      // key 清单来自 manifest.credentials.requiredKeys（单一配置源，审计 P3-12）
+      const reqKeys = (ctx.manifest && ctx.manifest.credentials && ctx.manifest.credentials.requiredKeys && ctx.manifest.credentials.requiredKeys.length)
+        ? ctx.manifest.credentials.requiredKeys : ['OPENCODE_GO_API_KEY'];
+      const txt = fs.readFileSync(credPath, 'utf8');
+      const missing = reqKeys.filter((k) => !txt.includes(k));
+      if (missing.length === 0) out.push(ok('凭据含必需 key: ' + reqKeys.join(', ')));
+      else out.push(bad('凭据里缺 key: ' + missing.join(', ') + ' —— 默认模型通道起不来（文件在≠key在）'));
     } catch { out.push(warn('凭据文件读不了')); }
   }
   return out;

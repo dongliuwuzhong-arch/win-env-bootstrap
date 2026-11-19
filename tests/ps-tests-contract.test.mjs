@@ -19,6 +19,23 @@ test('scripts/*.ps1 必须纯 ASCII（PS 5.1 无 BOM 按 ANSI 读，中文注释
   }
 });
 
+test('checks 不许写死 .dsh 路径段，一律走 ctx.DSH_HOME（审计 P1-2 回归）', () => {
+  const dir = path.join(HERE, '..', 'scripts', 'checks');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js'))) {
+    const s = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.ok(!s.includes("'.dsh'"), f + " 写死了 '.dsh'——必须走 ctx.DSH_HOME");
+  }
+});
+
+test('g2/h 段消费 manifest 清单，不许另起炉灶（审计 P1-2 回归）', () => {
+  const g2 = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', 'g2-plugin-prereq.js'), 'utf8');
+  assert.ok(g2.includes('manifest.g2.manualPackages') && g2.includes('credentials.requiredKeys'), 'g2 段没走 manifest');
+  const h = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', 'h-workspace.js'), 'utf8');
+  assert.ok(h.includes('workspaceDirs') && h.includes('personaFiles'), 'h 段没走 manifest');
+  const a = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', 'a-core-runtime.js'), 'utf8');
+  assert.ok(!a.includes("ctx.HOME, '.dsh'"), 'a 段 pnpm 候选又写死 HOME/.dsh 了');
+});
+
 test('manifest.tweaks 元数据完整（id/name/what/revert/requiresAdmin 布尔）', () => {
   const m = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'config', 'manifest.json'), 'utf8'));
   assert.ok(Array.isArray(m.tweaks) && m.tweaks.length >= 1, 'manifest.tweaks 清单丢了');

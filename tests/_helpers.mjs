@@ -84,6 +84,8 @@ export function fakeSystemCtx({ execPolicy, tasks = [], exists = () => true } = 
 export function fakeCoreCtx({ pythonVersion = null, runs = {}, bundled = null } = {}) {
   return {
     HOME: 'C:\\Users\\tester',
+    DSH_HOME: 'C:\\Users\\tester\\.dsh',
+    manifest: {},
     pathJoin: (...parts) => path.join(...parts),
     pythonVersion: () => pythonVersion,
     run: (exe) => (exe in runs ? runs[exe] : null),

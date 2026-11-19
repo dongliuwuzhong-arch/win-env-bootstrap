@@ -142,6 +142,19 @@ verify.mjs checks this section read-only; bootstrap.ps1's G2 section repairs it 
 - **`-split` returns a String, not an array, for a single entry** — `($parts + $dir)` becomes string concatenation and the whole PATH turns into `C:\AAAC:\BBB`, getting worse with every run.
 - **`Set-Content -Encoding ASCII` turns CJK into `?`** — VBS paths with CJK silently break; the autostart dies without a sound.
 
+## Supported environments
+
+| Environment | Status |
+|---|---|
+| Windows 11 x64 + winget + online | ✅ tested (this machine + CI on windows-latest / windows-2022) |
+| Windows 10 1809+ x64 | ⚠️ not tested (ConPTY build check backs it up), expected to work |
+| ARM64 / offline / old Win10 SKUs without winget | ❌ untested. Without winget, auto-install degrades to install-manually hints |
+| macOS / Linux | ❌ unsupported |
+
+The bare-machine end-to-end checklist lives in [docs/裸机验证清单.md](docs/裸机验证清单.md) —
+one archived real-machine run turns out-of-box readiness from a promise into evidence; until then
+the honest label is semi-automatic migration assistant.
+
 ## System tweaks (optional)
 
 Windows tuning beyond environment completion: **opt-in per item, fully revertible**. The catalog lives in `config/manifest.json` under `tweaks[]`.

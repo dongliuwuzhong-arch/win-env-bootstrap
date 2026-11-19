@@ -35,7 +35,7 @@ export async function check(ctx) {
   const pnpmV = ctx.run('pnpm.cmd', ['--version']) || ctx.run('pnpm', ['--version']);
   const bundledPnpm = ctx.firstExisting([
     ...(ctx.DSH_ROOT ? [join(ctx.DSH_ROOT, 'resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs')] : []),
-    ctx.pathJoin(ctx.HOME, '.dsh', 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs'),
+    ctx.pathJoin(ctx.DSH_HOME, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs'),
   ]);
   if (pnpmV) out.push(ok('pnpm ' + pnpmV + '（系统）'));
   else if (bundledPnpm) out.push(ok('pnpm 由 DSH 自带（' + bundledPnpm + '）'));

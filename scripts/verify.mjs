@@ -85,31 +85,11 @@ say('时间: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' 
 say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
 
 // 并行跑（ctx 的探测在 createContext 里已 memo，PowerShell 快照也只取一次），
-// 但严格按 manifest 顺序输出——否则报告读起来会跳。
-// --jsonl 例外：串行跑，每段完成立刻吐进度行，让调用方看得到过程。
-let settled;
-if (jsonl) {
-  settled = [];
-  for (const m of todo) {
-    const st = await m.check(ctx).then((v) => ({ status: 'fulfilled', value: v }), (e) => ({ status: 'rejected', reason: e }));
-    settled.push(st);
-    // 崩溃段要如实报 hard:1（done 载荷里有「检查段崩了」bad 条），不许进度行装全绿（code-audit #6）
-    const crashed = st.status !== 'fulfilled';
-    const res0 = crashed ? [] : st.value;
-    process.stdout.write(JSON.stringify({
-      type: 'segment', id: m.id, ...(crashed ? { crashed: true } : {}),
-      hard: crashed ? 1 : res0.filter((r) => r.level === 'bad').length,
-      soft: res0.filter((r) => r.level === 'warn').length,
-    }) + '\n');
-  }
-} else {
-  settled = await Promise.allSettled(todo.map((m) => m.check(ctx)));
-}
-
+// 按 manifest 顺序流式刷出：某段完成且它之前的段都已刷出时立刻打印——
+// M 段 240s 不再让整个屏幕静默（审计 P1-1）。--jsonl 串行跑，逐段吐进度行。
 const results = [];
-for (let i = 0; i < todo.length; i++) {
+function render(i, st) {
   const mod = todo[i];
-  const st = settled[i];
   let res;
   if (st.status === 'fulfilled') {
     res = st.value;
@@ -117,10 +97,51 @@ for (let i = 0; i < todo.length; i++) {
     // 一段炸了不该吞掉整份报告，但也不能当没事发生
     res = [bad('检查段崩了: ' + String((st.reason && st.reason.message) || st.reason).slice(0, 120))];
   }
-  say('');
-  say('--- ' + mod.id + '. ' + mod.title + ' ---');
-  for (const r of res) say(line(r));
+  if (jsonl) {
+    // 崩溃段要如实报 hard:1（done 载荷里有「检查段崩了」bad 条），不许进度行装全绿（code-audit #6）
+    const crashed = st.status !== 'fulfilled';
+    const res0 = crashed ? [] : res;
+    process.stdout.write(JSON.stringify({
+      type: 'segment', id: mod.id, ...(crashed ? { crashed: true } : {}),
+      hard: crashed ? 1 : res0.filter((r) => r.level === 'bad').length,
+      soft: res0.filter((r) => r.level === 'warn').length,
+    }) + '\n');
+  } else {
+    say('');
+    say('--- ' + mod.id + '. ' + mod.title + ' ---');
+    for (const r of res) say(line(r));
+  }
   results.push(...stamp(mod.id, res));
+}
+
+if (jsonl) {
+  for (let i = 0; i < todo.length; i++) {
+    const st = await todo[i].check(ctx).then((v) => ({ status: 'fulfilled', value: v }), (e) => ({ status: 'rejected', reason: e }));
+    render(i, st);
+  }
+} else {
+  const slots = new Array(todo.length).fill(undefined);
+  const announced = new Array(todo.length).fill(false);
+  let next = 0;
+  const started = Date.now();
+  const flush = () => {
+    while (next < todo.length && slots[next] !== undefined) {
+      render(next, slots[next]);
+      next++;
+    }
+    // 卡段反馈：排在队首还没好的那段，说一声在等谁（长耗时段不再无声）
+    if (next < todo.length && !announced[next]) {
+      announced[next] = true;
+      const w = todo[next];
+      say('');
+      say('... 等待 ' + w.id + '. ' + w.title + '（长耗时段，最长约 240s）');
+    }
+  };
+  await Promise.all(todo.map((m, i) => m.check(ctx).then(
+    (v) => { slots[i] = { status: 'fulfilled', value: v }; flush(); },
+    (e) => { slots[i] = { status: 'rejected', reason: e }; flush(); }
+  )));
+  void started;
 }
 
 const c = counts(results);

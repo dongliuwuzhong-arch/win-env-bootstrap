@@ -482,6 +482,9 @@
       "requiresAdmin": true
     }
   ],
+  "credentials": {
+    "requiredKeys": ["OPENCODE_GO_API_KEY"]
+  },
   "prerequisites": [
     {
       "id": "dsh-host",

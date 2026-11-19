@@ -250,8 +250,10 @@ function Get-CmdVersion($exe, $argList) {
     # "|| $out" would treat the Microsoft Store python stub (exit 9009,
     # stderr "Python was not found...") as INSTALLED and print the error
     # text as a version number.
+    # Empty $argList means NO arguments - never pass an empty string ('7z ""'
+    # behaves differently across 7-Zip versions, audit P2-1).
     try {
-        $raw = & $exe $argList 2>&1
+        $raw = if ($argList) { & $exe $argList 2>&1 } else { & $exe 2>&1 }
         if ($LASTEXITCODE -ne 0) { return $null }
         # Exit code 0 means it worked - accept text from stderr too (some tools
         # print their version banner there). Only skip EMPTY lines.
@@ -281,6 +283,14 @@ function Test-PathEntry($dir) {
     return $false
 }
 
+function Prune-Backups($dir, $pattern) {
+    # Backup files pile up forever (audit P2-7) - keep the newest 10.
+    try {
+        $old = @(Get-ChildItem -LiteralPath $dir -Filter $pattern -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -Skip 10)
+        foreach ($f in $old) { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue }
+    } catch { }
+}
+
 function Add-PathEntry($dir) {
     $p = Get-UserPath
     if (-not $p) { $p = '' }
@@ -291,6 +301,7 @@ function Add-PathEntry($dir) {
     try {
         Set-Content -Path $backup -Value $p -Encoding UTF8 -ErrorAction Stop
         Say "PATH backup -> $backup"
+        Prune-Backups $backupDir 'path-backup-*.txt'
     } catch {
         Say "PATH backup FAILED, refusing to touch PATH: $_" 'bad'
         return $false
@@ -329,6 +340,7 @@ function Remove-PathDuplicates {
     $backup = Join-Path $backupDir ('path-dedup-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.txt')
     try {
         Set-Content -Path $backup -Value $p -Encoding UTF8 -ErrorAction Stop
+        Prune-Backups $backupDir 'path-dedup-*.txt'
     } catch {
         Say "PATH backup FAILED, refusing to dedupe: $_" 'bad'
         return
@@ -377,6 +389,22 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
         # Probe the command the caller passed explicitly instead of wildcard-matching
         # $label. label is a display string; renaming it would silently break the probe.
         $probe = if ($probeCmd) { Get-CmdVersion $probeCmd $probeArgs } else { $null }
+        # Installed but not on PATH is the classic trap - try manifest pathDirs
+        # before giving up (generic version of the 7-Zip special case, audit P2-1).
+        if (-not $probe -and $probeCmd) {
+            $mfT = Get-Manifest
+            $tEntry = $null
+            if ($mfT -and $mfT.tools) { $tEntry = @($mfT.tools | Where-Object { $_.name -eq $probeCmd -or $_.probeCmd -eq $probeCmd }) | Select-Object -First 1 }
+            if ($tEntry -and $tEntry.pathDirs) {
+                foreach ($d in @($tEntry.pathDirs)) {
+                    if (Test-Path -LiteralPath $d) {
+                        Add-PathEntry $d | Out-Null
+                        $probe = Get-CmdVersion $probeCmd $probeArgs
+                        if ($probe) { break }
+                    }
+                }
+            }
+        }
         if ($probe) { Say "$label installed ($probe)" 'fix' }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
         elseif ($rc -eq -1978335212) { Say "$label already installed per winget but not resolvable - check PATH" 'warn' }
@@ -392,8 +420,16 @@ function Install-Pip($pyExe, $pkg, $label) {
     # it still holds the PREVIOUS command's code, so we would lie
     # about installing successfully.
     $global:LASTEXITCODE = -1
-    try { & $pyExe -m pip install $pkg --quiet 2>&1 | Out-Null } catch { }
-    if ($LASTEXITCODE -eq 0) { Say "installed $label" 'fix' } else { Say "$label install failed" 'warn' }
+    $outp = ''
+    try { $outp = ((& $pyExe -m pip install $pkg --quiet 2>&1) | Out-String) } catch { $outp = [string]$_ }
+    if ($LASTEXITCODE -eq 0) { Say "installed $label" 'fix' }
+    else {
+        # Swallowing stderr made failures undiagnosable (audit P1-3): keep the
+        # last non-empty lines and add triage hints.
+        $tail = ((@($outp -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 2) -join ' | ')
+        Say "$label install failed: $tail" 'warn'
+        Say '  hints: network? set $env:HTTPS_PROXY=http://127.0.0.1:7897 (or use a pip mirror) / rights? run as admin / source reachable?' 'info'
+    }
 }
 
 function Export-Inventory {
@@ -522,7 +558,7 @@ if ($node) {
     $major = 0
     if ($node -match 'v(\d+)') { $major = [int]$Matches[1] }
     if ($major -ge 24) { Say "node $node" 'ok' }
-    else { Say "node $node (need 24+)" 'bad' }
+    else { Say "node $node (need 24+; if winget LTS lags behind, install manually from https://nodejs.org)" 'bad' }
 } else { Say "node not found" 'bad'; Install-Pkg (Get-WingetId 'node' 'OpenJS.NodeJS.LTS') 'Node.js' $false 'node' '--version' }
 
 $python = Get-CmdVersion 'python' '--version'
@@ -547,13 +583,15 @@ $winget = Get-CmdVersion 'winget' '--version'
 if ($winget) { Say "winget $winget" 'ok' } else { Say "winget not found (cannot auto-install)" 'warn' }
 
 $pnpm = Get-CmdVersion 'pnpm' '--version'
-# DSH ships its own pnpm under resources/runtime/primary-runtime/dependencies/pnpm
+# DSH ships its own pnpm; candidates must match scripts/checks/a-core-runtime.js
+# exactly (same two locations, same order) or the two scripts disagree and -Apply
+# may install a redundant global pnpm (audit P1-2.1).
 $pnpmBundled = $null
 $rootForPnpm = Resolve-DshRoot
-if ($rootForPnpm) {
-    $p = Join-Path $rootForPnpm 'resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.cjs'
-    if (Test-Path $p) { $pnpmBundled = $p }
-}
+$pnpmCands = @()
+if ($rootForPnpm) { $pnpmCands += (Join-Path $rootForPnpm 'resources\runtime\primary-runtime\dependencies\pnpm\bin\pnpm.cjs') }
+$pnpmCands += (Join-Path $dshHome 'dsh-runtimes\dsh-primary-runtime\dependencies\pnpm\bin\pnpm.cjs')
+foreach ($p in $pnpmCands) { if (Test-Path -LiteralPath $p) { $pnpmBundled = $p; break } }
 if ($pnpm) { Say "pnpm $pnpm" 'ok' }
 elseif ($pnpmBundled) { Say "pnpm shipped with DSH ($pnpmBundled)" 'ok' }
 else {
@@ -639,7 +677,12 @@ $chromeCands = @(
 )
 $chrome = $null
 foreach ($c in $chromeCands) { if (Test-Path $c) { $chrome = $c; break } }
-if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg (Get-WingetId 'chrome' 'Google.Chrome') 'Google Chrome' $true 'chrome' '' }
+if ($chrome) { Say "chrome: $chrome" 'ok' }
+else {
+    Say "Chrome not found (fetch-render.mjs needs it)" 'warn'
+    Install-Pkg (Get-WingetId 'chrome' 'Google.Chrome') 'Google Chrome' $true 'chrome' ''
+    foreach ($c in $chromeCands) { if (Test-Path $c) { Say "chrome: $c" 'fix'; break } }
+}
 
 # puppeteer is handled once, in section C (detect -> install -> re-probe)
 
@@ -945,7 +988,10 @@ if ($WithScheduledTasks -and $Apply) {
     Say 'L. scheduled tasks' 'head'
     $exportScript = Join-Path $wsPath 'tools\session-export.mjs'
     if ((Test-Path $exportScript) -and (Get-Command node -ErrorAction SilentlyContinue)) {
-        $act = New-ScheduledTaskAction -Execute 'node' -Argument ('"' + $exportScript + '" --days=3') -WorkingDirectory $wsPath
+        $nodeExe = 'node'
+        $nodeCmd = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($nodeCmd) { $nodeExe = $nodeCmd.Source }
+        $act = New-ScheduledTaskAction -Execute $nodeExe -Argument ('"' + $exportScript + '" --days=3') -WorkingDirectory $wsPath
         $trg = New-ScheduledTaskTrigger -Daily -At '23:30'
         try {
             Register-ScheduledTask -TaskName 'DSH-DialogArchive' -Action $act -Trigger $trg -Description 'DSH daily dialog archive' -Force | Out-Null
@@ -954,6 +1000,10 @@ if ($WithScheduledTasks -and $Apply) {
     } else {
         Say "session-export.mjs missing, skip task" 'warn'
     }
+}
+
+if (($WithProxy -or $WithScheduledTasks) -and -not $Apply) {
+    Say '-WithProxy / -WithScheduledTasks only take effect together with -Apply' 'warn'
 }
 
 # ============ summary ============

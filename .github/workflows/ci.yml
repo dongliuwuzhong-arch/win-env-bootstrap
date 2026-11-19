@@ -1,7 +1,8 @@
 name: ci
 
 # dsh-env-bootstrap 的 CI：契约测试 + 语法 + 只读自检。
-# 绝不跑 bootstrap -Apply —— 那会真装软件、真改 PATH，CI 机器不该被改。
+# 不做真安装：绝不让 winget/pip/npm 真装软件、真改 PATH。
+# （Pester 收敛测试里的 -Apply 全部跑在假桩沙箱上，不碰真系统——审计 P3-9 口径修正）
 #
 # 路径说明：本文件放在技能目录内（<skill>/.github/workflows/ci.yml）。
 #   - 技能目录本身是仓库根时：SKILL_ROOT = .

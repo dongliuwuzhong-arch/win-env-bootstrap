@@ -62,7 +62,7 @@ export async function check(ctx) {
   // 人格注入产物：AGENTS.md 必须比 persona 源新
   try {
     const personaDir = join(ctx.WS, 'knowledge', 'persona');
-    const agentsMd = join(ctx.HOME, '.dsh', 'AGENTS.md');
+    const agentsMd = join(ctx.DSH_HOME, 'AGENTS.md');
     if (ctx.exists(personaDir) && ctx.exists(agentsMd)) {
       const genTime = fs.statSync(agentsMd).mtimeMs;
       const srcs = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md']

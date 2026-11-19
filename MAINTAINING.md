@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 62 个文件 / 5015 行代码 / 117 条 node 测试 + 21 条 Pester（2026-11-19 实测） |
+| 规模 | 65 个文件 / 5336 行代码 / 122 条 node 测试 + 21 条 Pester（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 117/117、Pester 21/21 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 122/122、Pester 21/21 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -51,7 +51,7 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 117 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 122 条，必须全过
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 21 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
@@ -94,7 +94,7 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
 scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve（progress/cancelled 已支持）
 scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              117 条契约测试，每条钉住一个真实发生过的 bug
+tests/*.mjs              122 条契约测试，每条钉住一个真实发生过的 bug
 tests-ps/*.tests.ps1     21 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
 .github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
@@ -208,19 +208,21 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 
 ## 已知缺陷 / 没做的
 
-2026-11-19 两轮审查的严重项（puppeteer 死代码 / frida 等不装 / 工作区解析不一致 / MCP 三处 / CI 退出码泄漏）**都已修**，逐项处置见 `docs/` 下两份审查报告，回归锚点在 `tests/`。下表只记**仍然没做**的。
+2026-11-19 两轮自查审查 + 一轮第三方审计（`docs/审计-20261119-WorkBuddy.md`）的严重项**代码侧都已修**（含 CI 判据失明、verify 批量输出、双脚本漂移三处、pip 吞 stderr），处置见 `docs/` 各报告与维护日志，回归锚点在 `tests/`。下表只记**仍然没做**的。
 
 | 项 | 状态 |
 |---|---|
 | MCP `tool_run` / `env_repair`（写操作） | **没做**。写操作 MCP = 任意命令执行面，要先想清白名单和审计 |
-| 真·裸机全流程验证 | **没做过**。所有验证都是在已配好的机器上跑的 |
+| 真·裸机全流程验证 | **没跑过**——唯一没有代码解的项。清单与归档规范：`docs/裸机验证清单.md`（含 V5/V6 并测） |
 | 非标准安装路径（D 盘等） | 代码已走 `ctx.DSH_ROOT`，但**没在那样的机器上实测过** |
 | 非管理员会话 | winget 机器级安装的提权提示**没实测** |
-| Windows 10 / ARM64 / 离线 | 未覆盖，文档里也没声明不支持 |
+| Windows 10 / ARM64 / 离线 | 仍未实测；README「支持范围」已声明口径（2026-11-19） |
+| Get-CmdVersion 把 banner 首行当版本串（7z 显示版权行） | **没修**（审计 P3-5，纯展示问题） |
+| G2 修复产物无自动回滚校验 | **没做**（审计 P3-10），回滚步骤在 README「怎么退」 |
 | `G2` 修复源 | 源是宿主 `resources\app\dsh\node_modules` 与 `~/.dsh/plugins`，两者都得先从旧机带过来。真·新机两处皆空时修不了，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |
-| SIGTERM 优雅退出 | **没做**。progress / cancelled / isError 已补（2026-11-19 第五轮），手动掐断走 cancelled |
+| compaction-basic 失配只报不修 | **没做**（审计 P2-6）。宿主升级后 profile 里是拷贝时，-RepairG2 应备份旧目录重建 junction |
 | 00 段与 H 段工作区口径有重叠 | **不合并**（审查建议 #14）。00 查「前置到位」、H 查「内容完整」，各有用途 |
 | winget -1978335212 降级为 ok | **不做**（审查建议 #15）。该分支只在「winget 说装了但命令解析不到」时走到——那是真缺口（多半是 PATH），降级成 ok 就是漏报。只把文案改准了 |
 

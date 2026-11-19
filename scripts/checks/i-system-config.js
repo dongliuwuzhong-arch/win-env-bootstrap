@@ -25,7 +25,7 @@ export async function check(ctx) {
   }
   const dups = [...seen.entries()].filter(([, c]) => c > 1);
   if (dups.length) {
-    for (const [k, c] of dups) out.push(warn('PATH 重复 ' + c + ' 次: ' + k + '（只报告，bootstrap 也不去重——需手工清理）'));
+    for (const [k, c] of dups) out.push(warn('PATH 重复 ' + c + ' 次: ' + k + '（此处统计进程合并 PATH；用户 PATH 重复 bootstrap -Apply/-DedupPath 会自动去重并备份，Machine 侧重复需手工清理）'));
   } else out.push(ok('进程 PATH 无重复项'));
 
   // CurrentUser 常是 Undefined（继承），必须看生效值，否则 LocalMachine=Restricted 时报 OK。

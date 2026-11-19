@@ -59,15 +59,16 @@ export function createContext() {
   const manifest = loadManifest();
   const HOME = os.homedir();
   // 公开库里 manifest.workspace.default 留空，由使用者用环境变量指定，避免把作者自己的路径写进仓库
-  const WS = resolveWorkspace({
-    env: process.env.DSH_WORKSPACE,
-    manifestDefault: manifest.workspace && manifest.workspace.default,
-  });
+  const wsEnv = process.env.DSH_WORKSPACE;
+  const wsMfDefault = manifest.workspace && manifest.workspace.default;
+  const WS = resolveWorkspace({ env: wsEnv, manifestDefault: wsMfDefault });
+  // wsIsFallback：WS 是不是「谁都没配」时的内置兜底——兜底落空的文案跟真路径不存在不一样（审计 P2-5）
+  const wsIsFallback = !wsEnv && !wsMfDefault;
   // DSH_HOME 可被环境变量覆盖：裸机模拟测试和换用户名都需要它，不能写死 homedir
   const DSH_HOME = process.env.DSH_HOME || path.join(HOME, '.dsh');
 
   const ctx = {
-    HOME, WS, DSH_HOME, manifest,
+    HOME, WS, wsIsFallback, DSH_HOME, manifest,
     run, runNode, exists, firstExisting,
     path, pathJoin: path.join,
     DSH_ROOT: resolveDshRoot((manifest.dsh && manifest.dsh.rootCandidates) || FALLBACK.dsh.rootCandidates),

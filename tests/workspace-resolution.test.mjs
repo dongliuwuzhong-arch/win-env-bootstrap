@@ -22,6 +22,19 @@ test('bootstrap.ps1 的内置兜底码点没变（0x7A7A 0x95F4 = 空间）', ()
     'bootstrap 兜底码点变了，paths.js 的 FALLBACK 必须跟着核对');
 });
 
+test('内置兜底落空时报「未配置」并指路，不是干巴巴「不存在」（审计 P2-5 回归）', async () => {
+  const h = await import('../scripts/checks/h-workspace.js');
+  const out = await h.check({ WS: 'C:\\不存在\\的路径', wsIsFallback: true, exists: () => false, pathJoin: (...a) => a.join('/') });
+  assert.ok(out.some((r) => r.message.includes('工作区未配置')), '兜底落空要报未配置');
+  assert.ok(out.some((r) => r.message.includes('DSH_WORKSPACE')), '要指路');
+});
+
+test('真路径不存在时报「不存在:」，不冒充未配置', async () => {
+  const h = await import('../scripts/checks/h-workspace.js');
+  const out = await h.check({ WS: 'D:\\real-but-missing', wsIsFallback: false, exists: () => false, pathJoin: (...a) => a.join('/') });
+  assert.ok(out.some((r) => r.message.includes('不存在: D:\\real-but-missing')));
+});
+
 test('工作区未配置时文案是「未配置」，不再吐空路径「不存在: 」', async () => {
   const h = await import('../scripts/checks/h-workspace.js');
   const out = await h.check({ WS: '', exists: () => false, pathJoin: (...a) => a.join('/') });

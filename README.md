@@ -150,6 +150,18 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
 - **`-split` 只返回一条时是 String 不是数组** —— `($parts + $dir)` 做字符串拼接，整条 PATH 糊成 `C:\AAAC:\BBB`，且每跑一次更烂。
 - **`Set-Content -Encoding ASCII` 写中文变 `?`** —— VBS 路径含中文就静默失效，开机自启坏得无声无息。
 
+## 支持范围
+
+| 环境 | 状态 |
+|---|---|
+| Windows 11 x64 + winget + 在线 | ✅ 实测（本机 + CI windows-latest / windows-2022 双跑） |
+| Windows 10 1809+ x64 | ⚠️ 未实测（有 ConPTY build 检查兜底），预计可用 |
+| ARM64 / 离线 / 无 winget 的老 Win10 SKU | ❌ 未测。无 winget 时自动安装退化为「install manually」提示 |
+| macOS / Linux | ❌ 不支持 |
+
+新机端到端（裸机）验证清单见 [docs/裸机验证清单.md](docs/裸机验证清单.md)——
+真机跑完归档，「开箱即用」就从承诺变实证；在那之前它自称的是「半自动换机助手」。
+
 ## 系统调优（可选）
 
 环境补齐之外的 Windows 设置调校，**逐项 opt-in、全部可回退**，清单在 `config/manifest.json` 的 `tweaks[]`：

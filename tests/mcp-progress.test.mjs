@@ -77,6 +77,14 @@ test('进度总数不吃空段：only=00,,A 的 total 是 2（break-it 露馅③
   assert.equal(progress[0].params.total, 2, '空段不计入 total');
 });
 
+test('tool_discover 无参数返回全量清单，不回 matched:0（审计 P3-2 回归）', async () => {
+  const lines = await callCollect('tools/call', { id: 11, name: 'tool_discover', arguments: {} });
+  const resp = lines.find((m) => m.id === 11);
+  const r = JSON.parse(resp.result.content[0].text);
+  assert.ok(r.matched > 0, '无过滤条件时不该是空清单');
+  assert.ok(r.tools.length === r.matched);
+});
+
 test('取消处理在源码里在位：notifications/cancelled + -32800（审查建议 #13）', () => {
   const s = fs.readFileSync(SERVER, 'utf8');
   assert.ok(/notifications\/cancelled/.test(s), '缺 cancelled 处理');
