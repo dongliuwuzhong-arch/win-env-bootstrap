@@ -99,7 +99,18 @@ function Repair-ManualPackages($profNM, $hostNM, $cfg) {
             $lt = Get-LinkType $dst
             if ($pkg -eq $cfg.junctionPackage) {
                 if ($lt) { Say "  $pkg already linked ($lt), skip" 'ok' }
-                else { Say "  $pkg is a plain copy - runs now, desyncs after a host upgrade" 'warn' }
+                elseif (-not $script:doG2) { Say "  $pkg is a plain copy - runs now, desyncs after a host upgrade (rerun -RepairG2 to relink)" 'warn' }
+                elseif (-not $src -or -not (Test-Path -LiteralPath $src)) { Say "  $pkg is a plain copy and no host source to relink from" 'warn' }
+                else {
+                    # Mismatch repair (audit P2-6): keep the old copy as .bak-timestamp,
+                    # replace with a junction so host upgrades keep following.
+                    $bak = $dst + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+                    try {
+                        Rename-Item -LiteralPath $dst -NewName (Split-Path -Leaf $bak) -ErrorAction Stop
+                        New-Item -ItemType Junction -Path $dst -Target $src -ErrorAction Stop | Out-Null
+                        Say "  relinked $pkg -> $src (old copy kept at $bak)" 'fix'
+                    } catch { Say "  relink $pkg failed: $_" 'bad' }
+                }
             } else { Say "  $pkg present, skip" 'ok' }
             continue
         }

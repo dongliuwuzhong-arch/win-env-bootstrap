@@ -255,14 +255,14 @@ M 段 selfcheck   数秒（高负载 ~9s）   <- 大头，是 dsh-selfcheck 自�
 ```bash
 cd .agents/skills/dsh-env-bootstrap
 node --test "tests/**/*.test.mjs"     # 122 个 node 契约测试
-powershell -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 21 个 Pester（bootstrap 函数直测 + 幂等收敛 + tweaks 探针）
+powershell -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 23 个 Pester（bootstrap 函数直测 + 幂等收敛 + tweaks 探针）
 powershell -File scripts/smoke.ps1    # 一键冒烟
 ```
 
 ⚠️ **Node 22+ 把 `--test` 的位置参数当 glob**，写 `node --test tests/` 会报
 `Could not find 'tests'`，必须用 `node --test "tests/**/*.test.mjs"`。
 
-122 个 node 测试 + 21 个 Pester 每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
+122 个 node 测试 + 23 个 Pester 每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
 执行策略空值、Store python 桩、版本号浮点解析、manifest 与 checks 同序、退出码契约、幂等收敛）。
 Pester 走 PS parser 抽函数直测，不跑脚本主体；测试文件必须带 UTF-8 BOM（锚点钉着）。
 

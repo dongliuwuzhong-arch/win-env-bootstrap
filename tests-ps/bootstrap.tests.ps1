@@ -107,6 +107,41 @@ Describe 'Test-PendingReboot' {
     }
 }
 
+Describe 'Repair-ManualPackages 失配自修（审计 P2-6 回归）' {
+    BeforeEach {
+        Mock Write-Host { }
+        $script:renamed = $null
+        $script:junctionTo = $null
+        Mock Test-Path { $true }
+        Mock Get-LinkType { $null }
+        Mock Rename-Item { $script:renamedCalled = $true; $script:renamed = $PesterBoundParameters['NewName'] }
+        Mock New-Item {
+            $script:junctionCalled = $true
+            # New-Item 的 -Target 是 -Value 的别名，绑定表里存的是 Value
+            $t = $PesterBoundParameters['Target']; if (-not $t) { $t = $PesterBoundParameters['Value'] }
+            $script:junctionTo = $t
+        }
+        $script:doG2 = $true
+        # Pester 5+ discovery/run 两阶段：Describe 体里的赋值到运行期是 $null，必须放 BeforeEach
+        $cfg2 = [pscustomobject]@{ junctionPackage = 'dsh-compaction-basic'; manualPackages = @('dsh-compaction-basic') }
+    }
+    It '普通拷贝 + doG2 + 有源：备份旧目录并重建 junction' {
+        $script:renamedCalled = $false
+        $script:junctionCalled = $false
+        Repair-ManualPackages 'C:\prof\node_modules' 'C:\host\node_modules' $cfg2
+        $script:renamedCalled | Should -Be $true
+        $script:junctionCalled | Should -Be $true
+        $script:renamed | Should -Match '\.bak-'
+        $script:junctionTo | Should -Be 'C:\host\node_modules\@deepseek-ai\dsh-compaction-basic'
+    }
+    It '普通拷贝但没开 -RepairG2：只警告不动手' {
+        $script:doG2 = $false
+        Repair-ManualPackages 'C:\prof\node_modules' 'C:\host\node_modules' $cfg2
+        $script:renamed | Should -Be $null
+        $script:junctionTo | Should -Be $null
+    }
+}
+
 Describe 'Get-WingetId' {
     It 'manifest 有就用 manifest，没有用兜底' {
         Mock Get-Manifest { [pscustomobject]@{ tools = @([pscustomobject]@{ name = '7z'; winget = '7zip.7zip' }) } }

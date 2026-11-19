@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 65 个文件 / 5336 行代码 / 122 条 node 测试 + 21 条 Pester（2026-11-19 实测） |
+| 规模 | 65 个文件 / 5336 行代码 / 122 条 node 测试 + 23 条 Pester（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 122/122、Pester 21/21 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 122/122、Pester 23/23 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -52,7 +52,7 @@ cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
 node --test "tests/**/*.test.mjs"                    # 122 条，必须全过
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 21 条，必须全过
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 23 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
 ```
@@ -95,7 +95,7 @@ scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool
 scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
 tests/*.mjs              122 条契约测试，每条钉住一个真实发生过的 bug
-tests-ps/*.tests.ps1     21 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
+tests-ps/*.tests.ps1     23 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
 .github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）
 LICENSE / .gitignore     MIT / 备份与临时件忽略
@@ -222,7 +222,6 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 | `G2` 修复源 | 源是宿主 `resources\app\dsh\node_modules` 与 `~/.dsh/plugins`，两者都得先从旧机带过来。真·新机两处皆空时修不了，得改成从 npm 拉（`npm pack @deepseek-ai/dsh-compaction-basic`） |
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |
-| compaction-basic 失配只报不修 | **没做**（审计 P2-6）。宿主升级后 profile 里是拷贝时，-RepairG2 应备份旧目录重建 junction |
 | 00 段与 H 段工作区口径有重叠 | **不合并**（审查建议 #14）。00 查「前置到位」、H 查「内容完整」，各有用途 |
 | winget -1978335212 降级为 ok | **不做**（审查建议 #15）。该分支只在「winget 说装了但命令解析不到」时走到——那是真缺口（多半是 PATH），降级成 ok 就是漏报。只把文案改准了 |
 
