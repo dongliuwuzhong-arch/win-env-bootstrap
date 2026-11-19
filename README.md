@@ -150,6 +150,25 @@ verify.mjs 只读查这一段，bootstrap.ps1 的 G2 段带修复（`-RepairG2`�
 - **`-split` 只返回一条时是 String 不是数组** —— `($parts + $dir)` 做字符串拼接，整条 PATH 糊成 `C:\AAAC:\BBB`，且每跑一次更烂。
 - **`Set-Content -Encoding ASCII` 写中文变 `?`** —— VBS 路径含中文就静默失效，开机自启坏得无声无息。
 
+## 两种用法
+
+这工具是两层的（`manifest.modules` 是清单源）：
+
+| 档 | 给谁 | 内容 | 怎么开 |
+|---|---|---|---|
+| **core 通用换机内核** | 任何换机/重装 Windows 的人 | 公开工具安装与补缺（A–F）、PATH 修缮、Windows 配置体检（I/J/K/O）、清单导出、tweaks 调优、MCP 解析 | 默认自动：没检测到 DSH 就只跑这层 |
+| **dsh 专属层** | DSH 用户 | 阶段一人工前置（00）、DSH 本体（G）、插件前置（G2）、工作区/人格/技能（H）、dsh-selfcheck（M）、凭据 | 默认自动：检测到 DSH 本体或 `~/.dsh` 就一起跑 |
+
+```powershell
+# 显式指定（覆盖自动探测）：
+node scripts\verify.mjs --profile=core
+powershell -File .\scripts\bootstrap.ps1 -Check -Profile Core
+# 或环境变量：DSH_MODULES=core / core,dsh
+```
+
+DSH 用户的体验不变（默认全跑 18 段）；非 DSH 用户不再被 G/G2 红条刷屏，退出码只算启用的段。
+显式 `--only=段名` 点名了就跑，不受模块过滤影响。
+
 ## 支持范围
 
 | 环境 | 状态 |

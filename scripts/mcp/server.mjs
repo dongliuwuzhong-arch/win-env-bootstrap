@@ -38,6 +38,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         only: { type: 'string', description: '只跑指定段，逗号分隔，如 A,G2,00' },
+        profile: { type: 'string', description: '模块档：core（通用换机内核）或 dsh（含 DSH 专属段），默认自动探测' },
       },
     },
   },
@@ -85,7 +86,8 @@ async function callTool(name, args, msg) {
       const slot = inflight.get(msg.id) || { cancelled: false, child: null };
       inflight.set(msg.id, slot);
       if (slot.cancelled) { inflight.delete(msg.id); resolve({ __rpcError: { code: -32800, message: 'request cancelled' } }); return; }
-      const child = spawn(process.execPath, [VERIFY, '--jsonl', ...(only ? ['--only=' + only] : [])]);
+      const prof = args && args.profile ? String(args.profile) : '';
+      const child = spawn(process.execPath, [VERIFY, '--jsonl', ...(only ? ['--only=' + only] : []), ...(prof ? ['--profile=' + prof] : [])]);
       child.killed = false;
       child.timedOut = false;
       // 自管超时：spawn 的 timeout 会 kill 并让 killed=true，跟用户取消混成一谈（code-audit #4）

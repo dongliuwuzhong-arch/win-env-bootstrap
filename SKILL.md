@@ -228,6 +228,7 @@ PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「
 | `-WithScheduledTasks` | 额外注册对话存档计划任务 |
 | `-DedupPath` | 真去重用户 PATH（之前只报告不去重，现在是真做） |
 | `-ExportInventory` | 导出换机清单（winget export + 两套 pip + npm）到 `~/.dsh/inventory-*.json` |
+| `-Profile Core\|Dsh` | 模块档：Core 跳过 DSH 段（0/G/G2/H/L），Dsh 全跑。默认自动探测 |
 | `-Workspace <路径>` | 指定工作区，优先级：参数 > `DSH_WORKSPACE` > manifest > 默认 |
 
 退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒（与 `verify.mjs` 一致）。
@@ -237,7 +238,8 @@ PATH 备份失败时脚本会**拒绝改动**（fail-closed），不会出现「
 | 参数 | 干什么 |
 |---|---|
 | （无） | 18 类全跑，约 12~15 秒（视 M 段负载） |
-| `--only=A,G2` | 只跑指定段 |
+| `--only=A,G2` | 只跑指定段（点名即跑，不受模块过滤影响） |
+| `--profile=core\|dsh` | 模块档：core 通用换机内核 / dsh 含 DSH 专属段。默认自动探测，见 README「两种用法」 |
 | `--no-selfcheck` | 跳过 M 段（dsh-selfcheck 数秒，负载高时 ~9 秒），降到约 5~8 秒 |
 
 退出码：`0` 全过 / `1` 有硬缺口 / `2` 仅提醒 / `64` 未知段名。
@@ -254,7 +256,7 @@ M 段 selfcheck   数秒（高负载 ~9s）   <- 大头，是 dsh-selfcheck 自�
 
 ```bash
 cd .agents/skills/dsh-env-bootstrap
-node --test "tests/**/*.test.mjs"     # 128 个 node 契约测试
+node --test "tests/**/*.test.mjs"     # 133 个 node 契约测试
 powershell -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 26 个 Pester（bootstrap 函数直测 + 幂等收敛 + tweaks 探针）
 powershell -File scripts/smoke.ps1    # 一键冒烟
 ```
@@ -262,7 +264,7 @@ powershell -File scripts/smoke.ps1    # 一键冒烟
 ⚠️ **Node 22+ 把 `--test` 的位置参数当 glob**，写 `node --test tests/` 会报
 `Could not find 'tests'`，必须用 `node --test "tests/**/*.test.mjs"`。
 
-128 个 node 测试 + 26 个 Pester 每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
+133 个 node 测试 + 26 个 Pester 每个都钉住一个真实发生过的 bug（`-split` 标量陷阱、VBS 编码、
 执行策略空值、Store python 桩、版本号浮点解析、manifest 与 checks 同序、退出码契约、幂等收敛）。
 Pester 走 PS parser 抽函数直测，不跑脚本主体；测试文件必须带 UTF-8 BOM（锚点钉着）。
 

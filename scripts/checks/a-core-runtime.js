@@ -33,13 +33,14 @@ export async function check(ctx) {
   // pnpm: DSH 自带一份（runtime/primary-runtime/dependencies/pnpm），
   // 系统 PATH 里没有不算缺口。只有两边都没有才是真问题。
   const pnpmV = ctx.run('pnpm.cmd', ['--version']) || ctx.run('pnpm', ['--version']);
-  const bundledPnpm = ctx.firstExisting([
+  // 自带运行时探测只在 DSH 环境做；core 用户的口径不提 DSH（审计二审 5.1）
+  const bundledPnpm = ctx.hasDsh ? ctx.firstExisting([
     ...(ctx.DSH_ROOT ? [join(ctx.DSH_ROOT, 'resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs')] : []),
     ctx.pathJoin(ctx.DSH_HOME, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.cjs'),
-  ]);
-  if (pnpmV) out.push(ok('pnpm ' + pnpmV + '（系统）'));
+  ]) : null;
+  if (pnpmV) out.push(ok('pnpm ' + pnpmV + (ctx.hasDsh ? '（系统）' : '')));
   else if (bundledPnpm) out.push(ok('pnpm 由 DSH 自带（' + bundledPnpm + '）'));
-  else out.push(bad('pnpm 既不在 PATH 也不在 DSH 运行时里'));
+  else out.push(bad('pnpm 不在 PATH' + (ctx.hasDsh ? '，DSH 运行时里也没有' : '') + '（要 build/monorepo 就 npm i -g pnpm）'));
   // agent-cli: the commands an agent reaches for first.
   // bootstrap installs them; without a check here nothing verifies they landed.
   for (const [cmd, args, why] of [

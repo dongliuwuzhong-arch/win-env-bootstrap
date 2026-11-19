@@ -44,6 +44,8 @@ export async function check(ctx) {
   if (ctx.exists(arExe)) out.push(ok('agent-reach CLI 在'));
   else out.push(info('agent-reach CLI 未装（uv tool install）'));
 
+  // soul/ChatTrace/TTS 是 DSH 专属项：core profile 跳过（审计二审 5.1）
+  if (ctx.hasDsh) {
   // DSH_SOUL_DATABASE 是用户级环境变量，两个目录都带不走（快照里已查）
   const soulEnv = ctx.sys().env.soulDb;
   if (soulEnv && soulEnv.trim()) out.push(ok('DSH_SOUL_DATABASE = ' + soulEnv.trim()));
@@ -55,5 +57,6 @@ export async function check(ctx) {
 
   if (await canResolve('api.msedgeservices.com', 8000)) out.push(ok('TTS 端点可解析（api.msedgeservices.com）'));
   else out.push(info('TTS 端点解析不到（dsh-plugin-tts 会哑掉）'));
+  }
   return out;
 }

@@ -36,6 +36,13 @@ test('g2/h 段消费 manifest 清单，不许另起炉灶（审计 P1-2 回归�
   assert.ok(!a.includes("ctx.HOME, '.dsh'"), 'a 段 pnpm 候选又写死 HOME/.dsh 了');
 });
 
+test('bootstrap 有 -Profile 参数与 DSH 段闸（验收③ PS 侧锚点）', () => {
+  const b = fs.readFileSync(path.join(HERE, '..', 'scripts', 'bootstrap.ps1'), 'utf8');
+  assert.ok(b.includes('[string]$Profile'), '缺 -Profile 参数');
+  assert.ok(b.split('if ($script:hasDsh) {').length - 1 >= 5, 'DSH 段闸至少五处（0/G/G2/H/F）');
+  assert.ok(b.includes('unknown -Profile'), '坏 profile 要有提示');
+});
+
 test('p 段 persona 清单走 manifest；凭据判定是「值非空」不是 includes（审计 N7/N8 回归）', () => {
   const p = fs.readFileSync(path.join(HERE, '..', 'scripts', 'checks', 'p-integrity-migration.js'), 'utf8');
   assert.ok(p.includes('manifest.personaFiles'), 'p 段没走 manifest.personaFiles');

@@ -5,8 +5,9 @@ import { check } from '../scripts/checks/f-python-packages.js';
 // 历史 bug：拿 check-env.py 的 import 名（Cryptodome / pysilk）去匹配 pip list，
 // 而 pip list 打印的是分发名（pycryptodomex / silk-python）——装满了也永远报缺。
 
-function fakeCtx(pipText, manifest) {
+function fakeCtx(pipText, manifest, hasDsh) {
   return {
+    hasDsh: Boolean(hasDsh),
     manifest: manifest || { pythonPackages: { system: [
       { name: 'pillow' }, { name: 'pyyaml' },
       { name: 'frida', optional: true, consumer: 'wechat-history' },
@@ -33,6 +34,13 @@ test('分发名齐了就该绿：pycryptodomex / silk-python 装了不再报缺�
   const out = await check(fakeCtx(pipText));
   const notOk = out.filter((r) => r.message.startsWith('python:') && r.level !== 'ok');
   assert.deepEqual(notOk.map((r) => r.message), [], '分发名齐了还报缺 = 又拿 import 名匹配了');
+});
+
+test('dshBundled 子项跟模块门走：hasDsh 才探、core 不提（审计二审 5.1）', async () => {
+  const on = await check(fakeCtx(['pillow 1.0', 'numpy 2.0', 'pandas 3.0', 'openpyxl 4.0', 'lxml 5.0'].join('\n'), undefined, true));
+  assert.ok(on.some((r) => r.message.startsWith('DSH 自带')), 'hasDsh 时要探 dshBundled');
+  const off = await check(fakeCtx('pillow 1.0', undefined, false));
+  assert.ok(!off.some((r) => r.message.startsWith('DSH 自带')), 'core 档不该出现 DSH 自带 python 行');
 });
 
 test('判据的失败输入：真缺包必须报得出来', async () => {

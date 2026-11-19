@@ -24,6 +24,7 @@ param(
     [switch]$DedupPath,
     [switch]$ExportInventory,
     [string]$InventoryPath,
+    [string]$Profile,
     [string]$Workspace
 )
 
@@ -548,6 +549,17 @@ $wsConfigured = [bool]($env:DSH_WORKSPACE -or ($mfWs -and $mfWs.workspace -and $
 # DSH_HOME can be overridden: bare-metal simulation and a different user name both need it
 $dshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
 
+# Modules: core = generic migration kernel, dsh = DSH-specific layer (manifest.modules).
+# -Profile Core|Dsh overrides auto detection; auto: DSH_ROOT or ~/.dsh present -> both.
+$prof = ''
+if ($Profile) { $prof = $Profile.Trim().ToLower() }
+if ($prof -and @('core', 'dsh') -notcontains $prof) { Say "unknown -Profile '$Profile' (use Core|Dsh); falling back to auto" 'warn'; $prof = '' }
+if ($prof -eq 'core') { $script:hasDsh = $false }
+elseif ($prof -eq 'dsh') { $script:hasDsh = $true }
+elseif ($env:DSH_MODULES -and $env:DSH_MODULES.Trim().ToLower() -eq 'core') { $script:hasDsh = $false }
+else { $script:hasDsh = ((Resolve-DshRoot) -ne $null) -or (Test-Path -LiteralPath $dshHome) }
+if (-not $script:hasDsh) { Say 'profile: core - DSH sections (0/G/G2/H/L) skipped' 'info' }
+
 # -ExportInventory is a standalone action (like -DedupPath): dump and exit.
 if ($ExportInventory) {
     Say 'exporting machine inventory (winget + pip x2 + npm) ...' 'head'
@@ -559,6 +571,7 @@ if ($ExportInventory) {
 # below are not misread as "this script is broken": installing the host, copying
 # ~/.dsh and the workspace, filling credentials are human steps by design.
 # Mirrors the 00 segment of verify.mjs.
+if ($script:hasDsh) {
 Say '0. manual prerequisites (phase 1 - human, not this script)' 'head'
 $mfPre = Get-Manifest
 if ($mfPre -and $mfPre.prerequisites) {
@@ -579,6 +592,7 @@ if ($mfPre -and $mfPre.prerequisites) {
     }
     if ($preMissing -gt 0) { Say "the items above are phase-1 human work - this script never does them" 'info' }
 } else { Say "manifest has no prerequisites list" 'info' }
+}
 
 # Pending reboot changes install reliability - say it BEFORE the install sections.
 $pendingReboot = @(Test-PendingReboot)
@@ -768,6 +782,7 @@ if ($python) {
     }
 }
 
+if ($script:hasDsh) {
 # DSH bundled python is a SECOND interpreter with its own packages - keep the
 # candidate list in sync with scripts/checks/f-python-packages.js.
 $dshPy = $null
@@ -794,8 +809,10 @@ if ($dshPy) {
         }
     }
 } else { Say "DSH bundled python not found (dsh-runtimes incomplete)" 'warn' }
+}
 
 # ============ G. DSH host ============
+if ($script:hasDsh) {
 Say 'G. DSH host' 'head'
 $DshRoot = Resolve-DshRoot
 $dshExe = if ($DshRoot) { Join-Path $DshRoot 'DeepSeek Harness.exe' } else { $null }
@@ -830,9 +847,12 @@ if (Test-Path $profPkg) {
 $cred = Join-Path $dshHome '.credentials.yaml'
 if (Test-Path $cred) { Say ".credentials.yaml present" 'ok' } else { Say ".credentials.yaml missing (fill API keys)" 'warn' }
 
+}
+
 # ============ G2. plugin load prerequisites ============
 # Everything here fails at LOAD time (throw on startup), not as a missing
 # feature - which is why it gets its own repair pass instead of a warning.
+if ($script:hasDsh) {
 Say 'G2. plugin load prerequisites' 'head'
 
 $cfgG2 = Get-G2Config
@@ -858,7 +878,10 @@ New-CredentialsTemplate $dshHome
 # not install the host and must not "fix" a schema gate by downgrading data.
 if (-not $DshRoot) { Say "DSH host missing: install it with the official installer, then rerun (this script never installs the host)" 'bad' }
 
+}
+
 # ============ H. workspace ============
+if ($script:hasDsh) {
 Say 'H. workspace' 'head'
 if (Test-Path $wsPath) {
     Say "workspace: $wsPath" 'ok'
@@ -887,6 +910,8 @@ if (Test-Path $wsPath) {
     } else { Say "skills dir missing: .agents\skills (agent has no skills without it)" 'bad' }
 } else {
     Say "workspace missing: $wsPath (copy from old machine)" 'bad'
+}
+
 }
 
 # ============ I. system config ============
@@ -1020,7 +1045,7 @@ sh.Run """__DSHEXE__"" --proxy-server=""http://127.0.0.1:7897"" --proxy-bypass-l
 }
 
 # ============ L. scheduled tasks (opt-in) ============
-if ($WithScheduledTasks -and $Apply) {
+if ($WithScheduledTasks -and $Apply -and $script:hasDsh) {
     Say 'L. scheduled tasks' 'head'
     $exportScript = Join-Path $wsPath 'tools\session-export.mjs'
     if ((Test-Path $exportScript) -and (Get-Command node -ErrorAction SilentlyContinue)) {

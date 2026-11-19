@@ -50,11 +50,17 @@ function parseArgs(argv) {
   // --jsonl：流式输出，每段完成吐一行 {type:'segment'}，最后一行 {type:'done',...}。
   // MCP 拿它发进度通知（240s 的 M 段不再无反馈），模式下段是串行跑的。
   const jsonl = argv.slice(2).includes('--jsonl');
-  return { only, noSelfcheck, json, jsonl };
+  // --profile=core|dsh：显式启用模块，覆盖自动探测（审计二审 5.2）
+  let profile = '';
+  for (const arg of argv.slice(2)) {
+    const m = arg.match(/^--profile=(.*)$/);
+    if (m) profile = m[1];
+  }
+  return { only, noSelfcheck, json, jsonl, profile };
 }
 
-const ctx = createContext();
-const { only, noSelfcheck, json, jsonl } = parseArgs(process.argv);
+const { only, noSelfcheck, json, jsonl, profile } = parseArgs(process.argv);
+const ctx = createContext({ profile });
 // --json/--jsonl 时把所有人类可读输出静音，只吐机器可读行
 const say = (json || jsonl) ? () => {} : console.log;
 
@@ -81,13 +87,25 @@ const manifestOrder = ((ctx.manifest.categories || []).map((c) => String(c.id)))
 const ordered = manifestOrder.map((id) => byId.get(id)).filter(Boolean);
 for (const m of CHECKS) if (!manifestOrder.includes(m.id)) ordered.push(m);
 
-let todo = only.length ? ordered.filter((m) => only.includes(m.id)) : ordered;
+let moduleNote = '';
+// 显式 --only 优先于模块过滤（点名了就跑）；否则按启用模块收窄——
+// 非 DSH 用户不再被 G/G2 红条刷屏，退出码也不被专属段污染（审计二审 5.2）
+let todo;
+if (only.length) {
+  todo = ordered.filter((m) => only.includes(m.id));
+} else {
+  const enabled = new Set(ctx.modules);
+  const skipped = ordered.filter((m) => !enabled.has(String(((ctx.manifest.categories || []).find((c) => String(c.id) === m.id) || {}).module || 'core')));
+  todo = ordered.filter((m) => !skipped.includes(m));
+  if (skipped.length) moduleNote = '未启用的专属段已跳过（' + skipped.map((m) => m.id).join(',') + '）—— ' + (ctx.hasDsh ? '' : '未检测到 DSH 环境，') + '可用 --profile=dsh 显式开启';
+}
 if (noSelfcheck) todo = todo.filter((m) => m.id !== 'M');
 
 say('');
 say('=== dsh-env-bootstrap · verify ===');
 say('时间: ' + new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }));
 say('主机: ' + os.hostname() + ' / ' + os.platform() + ' ' + os.arch());
+if (moduleNote) say(moduleNote);
 
 // 并行跑（ctx 的探测在 createContext 里已 memo，PowerShell 快照也只取一次），
 // 按 manifest 顺序流式刷出：某段完成且它之前的段都已刷出时立刻打印——

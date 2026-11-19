@@ -11,9 +11,9 @@
 |---|---|
 | 仓库 | `dongliuwuzhong-arch/dsh-env-bootstrap`（PUBLIC） |
 | HEAD | 见 `git log -1`（提交史都在本仓）；历轮处置与审查报告见 `docs/` |
-| 规模 | 67 个文件 / 5560 行代码 / 128 条 node 测试 + 26 条 Pester（2026-11-19 实测） |
+| 规模 | 68 个文件 / 5730 行代码 / 133 条 node 测试 + 26 条 Pester（2026-11-19 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
-| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 128/128、Pester 26/26 |
+| 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 133/133、Pester 26/26 |
 | 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/dsh-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
@@ -51,7 +51,7 @@ node -e "const s=require('fs').readFileSync('scripts/bootstrap.ps1','utf8');cons
 cd C:/DSH空间/.agents/skills/dsh-env-bootstrap
 
 # 三验
-node --test "tests/**/*.test.mjs"                    # 128 条，必须全过
+node --test "tests/**/*.test.mjs"                    # 133 条，必须全过
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 26 条，必须全过
 node scripts/verify.mjs                              # 硬缺口必须 0
 powershell -File scripts/smoke.ps1                   # PASS
@@ -65,6 +65,15 @@ git add -A && git commit -m "..." && git push
 # 推完看一眼 CI（绿了才算落地）：
 # https://github.com/dongliuwuzhong-arch/dsh-env-bootstrap/actions
 ```
+
+## 模块：core / dsh（2026-11-19 分层）
+
+`manifest.modules` + `categories[].module` 是清单源；启用判定单一实现在 `paths.js resolveModules`
+（显式 profile > `DSH_MODULES` 环境变量 > 自动探测：DSH_ROOT 或 ~/.dsh 在就双开）。
+- verify：按 module 过滤段（`--only` 点名优先）；混合段（F 的 dshBundled / P 的 WE_DATA+AGENTS+vbs / N 的 soul+ChatTrace+TTS / a 的自带 pnpm 探测）在项内用 `ctx.hasDsh` 上门。
+- bootstrap：`-Profile Core|Dsh`，段级闸在 0/G/G2/H/L + F 的 DSH 段（`$script:hasDsh`）。
+- **有意偏离二审 5.4**：00 未拆「通用前置」半截——通用前置 A/J/O 已覆盖，复制一份就是第二真相源；
+  模块守卫按二审验收标准走**行为验收**（tests 的 ①② 两条）+ 字面量锚点，没做纯符号级守卫（f/p/a 的 DSH 符号都在门内，误报会逼出假豁免）。
 
 ## 文件地图
 
@@ -94,7 +103,7 @@ scripts/checks/*.js      18 个检查段，各 export { id, title, check(ctx) ->
 scripts/mcp/server.mjs   MCP 只读三件套：env_status / tool_discover / tool_resolve（progress/cancelled 已支持）
 scripts/tweaks.ps1        系统调优（opt-in 可回退）：-List / -Apply <id|all> / -Revert <id|all>
 scripts/smoke.ps1        一键冒烟（语法 + 测试 + 快段 + bootstrap 退出码）
-tests/*.mjs              128 条契约测试，每条钉住一个真实发生过的 bug
+tests/*.mjs              133 条契约测试，每条钉住一个真实发生过的 bug
 tests-ps/*.tests.ps1     26 条 Pester（bootstrap/tweaks 函数直测 + 幂等收敛）。⚠️ 必须带 UTF-8 BOM
 .github/workflows/ci.yml 双机型矩阵（windows-2022 + windows-latest），不含任何 -Apply
 docs/                    审查报告归档（两份）+ 维护日志（倒序，新条目加最上）

@@ -24,92 +24,110 @@
     {
       "id": "00",
       "name": "人工前置（阶段一）",
-      "desc": "装本体 / 拷 ~/.dsh / 拷工作区 / 填凭据 —— 这四件脚本不做"
+      "desc": "装本体 / 拷 ~/.dsh / 拷工作区 / 填凭据 —— 这四件脚本不做",
+      "module": "dsh"
     },
     {
       "id": "A",
       "name": "核心运行时",
-      "desc": "Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm"
+      "desc": "Node 24+ / Python 3.12+ / Git / curl.exe / winget / pnpm",
+      "module": "core"
     },
     {
       "id": "B",
       "name": "归档工具",
-      "desc": "7-Zip + 是否在 PATH（User 和 Machine 都查）"
+      "desc": "7-Zip + 是否在 PATH（User 和 Machine 都查）",
+      "module": "core"
     },
     {
       "id": "C",
       "name": "媒体工具",
-      "desc": "ffmpeg / ffprobe / yt-dlp / ImageMagick"
+      "desc": "ffmpeg / ffprobe / yt-dlp / ImageMagick",
+      "module": "core"
     },
     {
       "id": "D",
       "name": "浏览器自动化",
-      "desc": "Chrome / puppeteer"
+      "desc": "Chrome / puppeteer",
+      "module": "core"
     },
     {
       "id": "E",
       "name": "逆向工具（可选）",
-      "desc": "frida"
+      "desc": "frida",
+      "module": "core"
     },
     {
       "id": "F",
       "name": "Python 包",
-      "desc": "系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包"
+      "desc": "系统 pillow/pyyaml + wechat 4 个 + DSH 自带 python 5 个核心包",
+      "module": "core"
     },
     {
       "id": "G",
       "name": "DSH 本体",
-      "desc": "宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容"
+      "desc": "宿主 exe / 解包树 / .dsh / profile bundles / 凭据内容",
+      "module": "dsh"
     },
     {
       "id": "G2",
       "name": "插件加载前置",
-      "desc": "junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1"
+      "desc": "junction / 手工包 / 本地插件 / node:sqlite / 宿主可写 / profile 名 / win-bash / uv / Steam / PS 5.1",
+      "module": "dsh"
     },
     {
       "id": "H",
       "name": "工作区",
-      "desc": "七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码"
+      "desc": "七个目录 / 人格四件套 / 技能库 / pyb-pys 硬编码",
+      "module": "dsh"
     },
     {
       "id": "I",
       "name": "系统配置",
-      "desc": "PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页"
+      "desc": "PATH 重复 / 执行策略生效值 / 计划任务动作 / 代码页",
+      "module": "core"
     },
     {
       "id": "J",
       "name": "网络",
-      "desc": "本地代理端口"
+      "desc": "本地代理端口",
+      "module": "core"
     },
     {
       "id": "K",
       "name": "代理与自启",
-      "desc": "启动器 vbs / Run 键"
+      "desc": "启动器 vbs / Run 键",
+      "module": "core"
     },
     {
       "id": "L",
       "name": "脚本可跑性",
-      "desc": "check-paths / check-skills / persona-lint / check-persona-context"
+      "desc": "check-paths / check-skills / persona-lint / check-persona-context",
+      "module": "dsh"
     },
     {
       "id": "M",
       "name": "总检",
-      "desc": "调 dsh-selfcheck，退出码 0 才算过"
+      "desc": "调 dsh-selfcheck，退出码 0 才算过",
+      "module": "dsh"
     },
     {
       "id": "N",
       "name": "技能级可选依赖",
-      "desc": "exiftool / dotnet / youtube-transcript / ChatTrace / TTS 端点"
+      "desc": "exiftool / dotnet / youtube-transcript / ChatTrace / TTS 端点",
+      "module": "core"
     },
     {
       "id": "O",
       "name": "系统环境",
-      "desc": "Defender / w32time / 中文字体 / LongPaths / 磁盘"
+      "desc": "Defender / w32time / 中文字体 / LongPaths / 磁盘",
+      "module": "core"
     },
     {
       "id": "P",
       "name": "环境完整性与迁移",
-      "desc": "端口 / 单实例 / 根证书 CA / 工作区 ACL / DSH_WE_DATA_DIR / AGENTS.md / 自启 vbs"
+      "desc": "端口 / 单实例 / 根证书 CA / 工作区 ACL / DSH_WE_DATA_DIR / AGENTS.md / 自启 vbs",
+      "module": "core"
     }
   ],
   "tools": [
@@ -123,7 +141,8 @@
       "optional": false,
       "consumer": "verify.mjs / selfcheck / 四个 L 段脚本 / puppeteer 生态",
       "capability": "runtime:node",
-      "degradedBehavior": "整个检查层跑不起来"
+      "degradedBehavior": "整个检查层跑不起来",
+      "module": "core"
     },
     {
       "name": "python",
@@ -136,7 +155,8 @@
       "fallback": "python3",
       "consumer": "F 段 pip 包 / wechat-history / osint / image_*.py",
       "capability": "runtime:python",
-      "degradedBehavior": "所有 Python 脚本失效"
+      "degradedBehavior": "所有 Python 脚本失效",
+      "module": "core"
     },
     {
       "name": "git",
@@ -147,7 +167,8 @@
       "optional": true,
       "consumer": "插件自更新 / agent-reach",
       "capability": "vcs:git",
-      "degradedBehavior": "插件更新与部分技能降级"
+      "degradedBehavior": "插件更新与部分技能降级",
+      "module": "core"
     },
     {
       "name": "curl.exe",
@@ -158,7 +179,8 @@
       "note": "PS 5.1 里 curl 是 Invoke-WebRequest 的别名",
       "consumer": "下载类脚本",
       "capability": "net:http",
-      "degradedBehavior": "用 Invoke-WebRequest 替代"
+      "degradedBehavior": "用 Invoke-WebRequest 替代",
+      "module": "core"
     },
     {
       "name": "winget",
@@ -168,7 +190,8 @@
       "optional": true,
       "consumer": "bootstrap 自身",
       "capability": "pkg:winget",
-      "degradedBehavior": "无法自动安装，只能手工"
+      "degradedBehavior": "无法自动安装，只能手工",
+      "module": "core"
     },
     {
       "name": "pnpm",
@@ -179,7 +202,8 @@
       "note": "DSH 自带一份，系统没有不算缺口",
       "consumer": "profile 依赖安装",
       "capability": "pkg:pnpm",
-      "degradedBehavior": "DSH 自带一份，通常不受影响"
+      "degradedBehavior": "DSH 自带一份，通常不受影响",
+      "module": "core"
     },
     {
       "name": "7z",
@@ -193,7 +217,8 @@
       "exeName": "7z.exe",
       "consumer": "解包/归档类技能",
       "capability": "archive:7z",
-      "degradedBehavior": "压缩包解不开"
+      "degradedBehavior": "压缩包解不开",
+      "module": "core"
     },
     {
       "name": "ffmpeg",
@@ -204,7 +229,8 @@
       "optional": true,
       "consumer": "media-processor",
       "capability": "media:transcode",
-      "degradedBehavior": "转码/抽帧全废"
+      "degradedBehavior": "转码/抽帧全废",
+      "module": "core"
     },
     {
       "name": "ffprobe",
@@ -220,7 +246,8 @@
       "probeArgs": [
         "-version"
       ],
-      "note": "随 ffmpeg 包一起装，装完单独复测"
+      "note": "随 ffmpeg 包一起装，装完单独复测",
+      "module": "core"
     },
     {
       "name": "yt-dlp",
@@ -231,7 +258,8 @@
       "optional": true,
       "consumer": "video-transcript-downloader",
       "capability": "media:download",
-      "degradedBehavior": "下不了视频"
+      "degradedBehavior": "下不了视频",
+      "module": "core"
     },
     {
       "name": "magick",
@@ -243,7 +271,8 @@
       "note": "convert 在 Windows 会撞系统磁盘工具",
       "consumer": "image_*.py",
       "capability": "image:convert",
-      "degradedBehavior": "图像处理技能失效"
+      "degradedBehavior": "图像处理技能失效",
+      "module": "core"
     },
     {
       "name": "frida",
@@ -254,7 +283,8 @@
       "optional": true,
       "consumer": "wechat-history",
       "capability": "reverse:inject",
-      "degradedBehavior": "微信取证不可用"
+      "degradedBehavior": "微信取证不可用",
+      "module": "core"
     },
     {
       "name": "exiftool",
@@ -269,7 +299,8 @@
       "probeCmd": "exiftool",
       "probeArgs": [
         "-ver"
-      ]
+      ],
+      "module": "core"
     },
     {
       "name": "dotnet",
@@ -284,7 +315,8 @@
       "probeCmd": "dotnet",
       "probeArgs": [
         "--version"
-      ]
+      ],
+      "module": "core"
     },
     {
       "name": "rg",
@@ -297,7 +329,8 @@
       "consumer": "agent 文本搜索",
       "capability": "text:search",
       "degradedBehavior": "agent 只能用慢的替代方案",
-      "category": "agent-cli"
+      "category": "agent-cli",
+      "module": "core"
     },
     {
       "name": "jq",
@@ -310,7 +343,8 @@
       "consumer": "agent JSON 处理",
       "capability": "json:query",
       "degradedBehavior": "JSON 处理靠 node -e 兜底",
-      "category": "agent-cli"
+      "category": "agent-cli",
+      "module": "core"
     },
     {
       "name": "puppeteer",
@@ -320,7 +354,8 @@
       "consumer": "fetch-render.mjs",
       "capability": "browser:render",
       "degradedBehavior": "网页渲染截图不可用",
-      "category": "agent-cli"
+      "category": "agent-cli",
+      "module": "core"
     }
   ],
   "g2": {
@@ -483,7 +518,9 @@
     }
   ],
   "credentials": {
-    "requiredKeys": ["OPENCODE_GO_API_KEY"]
+    "requiredKeys": [
+      "OPENCODE_GO_API_KEY"
+    ]
   },
   "prerequisites": [
     {
@@ -521,5 +558,9 @@
       "blocking": false,
       "why": "工作区不在默认路径时才需要"
     }
-  ]
+  ],
+  "modules": {
+    "core": "通用换机内核：公开工具安装/补缺/PATH、Windows 配置体检、清单导出、tweaks、MCP 解析。不依赖 DSH。",
+    "dsh": "DSH 专属层：阶段一人工前置、DSH 本体、G2 插件前置、工作区/人格/技能、dsh-selfcheck、凭据。"
+  }
 }

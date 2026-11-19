@@ -42,6 +42,8 @@ export async function check(ctx) {
 
   // DSH 自带的 python 是另一套包（runtime.json 里列了 numpy/pandas/openpyxl/Pillow/lxml，
   // 但没有 PyYAML）。系统 python 有 ≠ DSH 的 python 有。
+  // dshBundled 是 DSH 专属项：core profile 下跳过（审计二审 5.1 模块边界）
+  if (ctx.hasDsh) {
   const dshPy = ctx.firstExisting([
     ...(ctx.DSH_ROOT ? [join(ctx.DSH_ROOT, 'resources', 'runtime', 'primary-runtime', 'dependencies', 'python', 'python.exe')] : []),
     ctx.pathJoin(ctx.DSH_HOME, 'dsh-runtimes', 'dsh-primary-runtime', 'dependencies', 'python', 'python.exe'),
@@ -57,6 +59,7 @@ export async function check(ctx) {
     } else out.push(info('DSH 自带 python 的 pip list 跑不了'));
   } else {
     out.push(warn('DSH 自带 python 运行时缺失（~/.dsh/dsh-runtimes 不完整）'));
+  }
   }
   return out;
 }

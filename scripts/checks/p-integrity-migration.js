@@ -54,6 +54,8 @@ export async function check(ctx) {
     else out.push(bad('工作区实测不可写'));
   }
 
+  // 以下 DSH_WE_DATA_DIR / AGENTS.md / 自启 vbs 是 DSH 专属项：core profile 跳过（审计二审 5.1）
+  if (ctx.hasDsh) {
   // DSH_WE_DATA_DIR：AGENTS.md 明写「不随目录走，要手工补」
   const weEnv = sys.env.weDataDir;
   if (weEnv && weEnv.trim()) out.push(ok('DSH_WE_DATA_DIR = ' + weEnv.trim()));
@@ -66,8 +68,11 @@ export async function check(ctx) {
     if (ctx.exists(personaDir) && ctx.exists(agentsMd)) {
       const genTime = fs.statSync(agentsMd).mtimeMs;
       // 与 h 段同源：persona 清单读 manifest.personaFiles（审计 N7）
-      const srcs = (ctx.manifest && ctx.manifest.personaFiles && ctx.manifest.personaFiles.length)
-        ? ctx.manifest.personaFiles : ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md']
+      // 括号必须加全：三元只选清单，.map 要作用在选出来的那份上——
+      // 否则 manifest 命中时路径没拼、时间比对恒「已同步」（假绿）
+      const personaList = (ctx.manifest && ctx.manifest.personaFiles && ctx.manifest.personaFiles.length)
+        ? ctx.manifest.personaFiles : ['SOUL.md', 'IDENTITY.md', 'USER.md', 'MEMORY.md'];
+      const srcs = personaList
         .map((f) => join(personaDir, f))
         .filter((f) => ctx.exists(f))
         .map((f) => ({ f, t: fs.statSync(f).mtimeMs }));
@@ -88,5 +93,6 @@ export async function check(ctx) {
       else out.push(bad('开机自启指向的 vbs 不存在: ' + m[1]));
     }
   } else out.push(info('Run 键里没有 DSH 项'));
+  }
   return out;
 }

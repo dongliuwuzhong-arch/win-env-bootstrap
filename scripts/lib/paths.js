@@ -55,7 +55,20 @@ export function resolveWorkspace({ param, env, manifestDefault } = {}) {
   return param || env || manifestDefault || FALLBACK.workspace.default || '';
 }
 
-export function createContext() {
+// 模块启用判定（单一实现，审计二审 5.2）：显式 profile > DSH_MODULES 环境变量 > 自动探测。
+// 自动规则：DSH_ROOT 或 ~/.dsh 在 -> core+dsh，否则只 core。dsh 隐含 core。
+export function resolveModules({ profile, env, hasDshInstall } = {}) {
+  const raw = String(profile || env || '').trim().toLowerCase();
+  if (raw) {
+    const parts = raw.split(',').map((x) => x.trim()).filter(Boolean);
+    if (parts.includes('core') || parts.includes('dsh')) {
+      return parts.includes('dsh') ? ['core', 'dsh'] : ['core'];
+    }
+  }
+  return hasDshInstall ? ['core', 'dsh'] : ['core'];
+}
+
+export function createContext(opts) {
   const manifest = loadManifest();
   const HOME = os.homedir();
   // 公开库里 manifest.workspace.default 留空，由使用者用环境变量指定，避免把作者自己的路径写进仓库
@@ -67,11 +80,15 @@ export function createContext() {
   // DSH_HOME 可被环境变量覆盖：裸机模拟测试和换用户名都需要它，不能写死 homedir
   const DSH_HOME = process.env.DSH_HOME || path.join(HOME, '.dsh');
 
+  // 模块：core = 通用换机内核；dsh = DSH 专属层（见 manifest.modules）
+  const DSH_ROOT = resolveDshRoot((manifest.dsh && manifest.dsh.rootCandidates) || FALLBACK.dsh.rootCandidates);
+  const hasDshInstall = Boolean(DSH_ROOT) || exists(DSH_HOME);
+  const modules = resolveModules({ profile: opts && opts.profile, env: process.env.DSH_MODULES, hasDshInstall });
   const ctx = {
-    HOME, WS, wsIsFallback, DSH_HOME, manifest,
+    HOME, WS, wsIsFallback, DSH_HOME, manifest, modules, hasDsh: modules.includes('dsh'),
     run, runNode, exists, firstExisting,
     path, pathJoin: path.join,
-    DSH_ROOT: resolveDshRoot((manifest.dsh && manifest.dsh.rootCandidates) || FALLBACK.dsh.rootCandidates),
+    DSH_ROOT,
   };
 
   // 每次运行只跑一次的外部查询（改造前这些各段各自重复起子进程）

@@ -142,6 +142,26 @@ verify.mjs checks this section read-only; bootstrap.ps1's G2 section repairs it 
 - **`-split` returns a String, not an array, for a single entry** — `($parts + $dir)` becomes string concatenation and the whole PATH turns into `C:\AAAC:\BBB`, getting worse with every run.
 - **`Set-Content -Encoding ASCII` turns CJK into `?`** — VBS paths with CJK silently break; the autostart dies without a sound.
 
+## Two ways to use it
+
+The tool is two-layered (`manifest.modules` is the single source of truth):
+
+| Profile | Who | What | How to enable |
+|---|---|---|---|
+| **core migration kernel** | anyone rebuilding a Windows machine | public tool install/repair (A-F), PATH repair, Windows config checks (I/J/K/O), inventory export, tweaks, MCP resolve | auto: runs alone when no DSH is detected |
+| **dsh pack** | DSH users | stage-one prerequisites (00), DSH host (G), plugin prereqs (G2), workspace/persona/skills (H), dsh-selfcheck (M), credentials | auto: joins in when a DSH install or ~/.dsh exists |
+
+```powershell
+# Explicit (overrides detection):
+node scripts\verify.mjs --profile=core
+powershell -File .\scripts\bootstrap.ps1 -Check -Profile Core
+# or env: DSH_MODULES=core / core,dsh
+```
+
+DSH users see no change (all 18 segments by default). Non-DSH users no longer get
+flooded by G/G2 red lines, and exit codes only count enabled segments. An explicit
+`--only=` segment list always wins over module filtering.
+
 ## Supported environments
 
 | Environment | Status |
