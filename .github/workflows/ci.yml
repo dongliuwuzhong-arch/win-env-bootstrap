@@ -50,6 +50,9 @@ jobs:
       # NuGet provider（无头会撞 ShouldContinue 空引用），且必须 -ExecutionPolicy
       # Bypass（runner 上 AllSigned 会拒载未签名测试文件）。
       - name: Pester（bootstrap.ps1 函数直测 + 幂等收敛）
+        # 显式用 Windows PowerShell 5.1：bootstrap 层就是 5.1 的世界（BOM/ANSI 陷阱
+        # 只在 5.1 里复现），且 5.1 的 PowerShellGet 1.0 需要下面的 NuGet provider 引导。
+        shell: powershell
         run: |
           Set-Location $env:SKILL_ROOT
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
