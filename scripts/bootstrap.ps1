@@ -193,7 +193,8 @@ function Say($msg, $level = 'info') {
         'ok'   { Write-Host "[ OK ] $msg" -ForegroundColor Green }
         'warn' { Write-Host "[WARN] $msg" -ForegroundColor Yellow; $script:warns++ }
         'bad'  { Write-Host "[FAIL] $msg" -ForegroundColor Red; $script:gapsFound++; $script:gapsLeft++ }
-        # 只能抵消本段产生的缺口：跨段抵消会让不相关的 fix 吃掉硬缺口，退出码虚低
+        # Only offset gaps opened in this segment. Cross-segment offset lets an unrelated
+        # fix eat a hard gap and makes the exit code too low.
         'fix'  { Write-Host "[FIX ] $msg" -ForegroundColor Cyan; $script:fixes++; if ($script:gapsLeft -gt $script:segBase) { $script:gapsLeft-- } }
         'head' { Write-Host ""; Write-Host "--- $msg ---" -ForegroundColor White; $script:segBase = $script:gapsLeft }
         default { Write-Host "       $msg" }
@@ -273,7 +274,7 @@ function Add-PathEntry($dir) {
 }
 
 function Remove-PathDuplicates {
-    # 真去重（之前文档写"自动去重"但代码里没有，是假承诺）
+    # Real dedupe (docs used to claim auto-dedupe while the code never did it).
     $p = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $p) { return }
     $parts = @($p -split ';' | Where-Object { $_ -ne '' })
@@ -300,6 +301,19 @@ function Remove-PathDuplicates {
     Say "deduped user PATH: $($parts.Count) -> $($clean.Count) entries (backup: $backup)" 'fix'
 }
 
+function Get-WingetId($toolName, $fallback) {
+    # manifest is the single config source: editing tools[].winget in
+    # config/manifest.json must actually take effect, not just be read by tests.
+    try {
+        $mf = Get-Manifest
+        if ($mf -and $mf.tools) {
+            $t = @($mf.tools | Where-Object { $_.name -eq $toolName }) | Select-Object -First 1
+            if ($t -and $t.winget) { return [string]$t.winget }
+        }
+    } catch { }
+    return $fallback
+}
+
 function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
     if (-not $Apply) {
         # Optional tools must NOT count as hard gaps - otherwise -Check exit 1
@@ -312,7 +326,7 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
         Say "$label missing, winget unavailable - install manually" 'bad'
         return
     }
-    # 需要提权的包在非管理员会话里会静默失败，先探一下
+    # Packages that need elevation fail silently in a non-admin session - probe first.
     $isAdmin = $false
     try {
         $id2 = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -320,12 +334,12 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
     } catch { }
     Say "installing $label via winget ($id) ..."
     try {
-        # --disable-interactivity: 无人值守时交互提示会挂死
+        # --disable-interactivity: an interactive prompt would hang an unattended run.
         & winget install --id $id --exact --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1 | Out-Null
         $rc = $LASTEXITCODE
-        # 不信任 winget 的退出码，装完实测一遍
-        # 按调用方显式传的命令探测，不用 $label 通配匹配 ——
-        # label 是给人看的显示字符串，一改（本地化/改名）probe 就落空。
+        # Do not trust winget's exit code - probe the command after install.
+        # Probe the command the caller passed explicitly instead of wildcard-matching
+        # $label. label is a display string; renaming it would silently break the probe.
         $probe = if ($probeCmd) { Get-CmdVersion $probeCmd $probeArgs } else { $null }
         if ($probe) { Say "$label installed ($probe)" 'fix' }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
@@ -354,7 +368,7 @@ if ($node) {
     if ($node -match 'v(\d+)') { $major = [int]$Matches[1] }
     if ($major -ge 24) { Say "node $node" 'ok' }
     else { Say "node $node (need 24+)" 'bad' }
-} else { Say "node not found" 'bad'; Install-Pkg 'OpenJS.NodeJS.LTS' 'Node.js' $false 'node' '--version' }
+} else { Say "node not found" 'bad'; Install-Pkg (Get-WingetId 'node' 'OpenJS.NodeJS.LTS') 'Node.js' $false 'node' '--version' }
 
 $python = Get-CmdVersion 'python' '--version'
 $pyName = 'python'
@@ -365,10 +379,10 @@ if ($python) {
         if ($pyMinor -ge 12) { Say "python $python" 'ok' }
         else { Say "python $python (need 3.12+)" 'bad' }
     } else { Say "python $python" 'ok' }
-} else { Say "python not found" 'bad'; Install-Pkg 'Python.Python.3.12' 'Python 3.12' $false 'python' '--version' }
+} else { Say "python not found" 'bad'; Install-Pkg (Get-WingetId 'python' 'Python.Python.3.12') 'Python 3.12' $false 'python' '--version' }
 
 $git = Get-CmdVersion 'git' '--version'
-if ($git) { Say "git $git" 'ok' } else { Say "git not found (optional but recommended)" 'warn'; Install-Pkg 'Git.Git' 'Git' $true 'git' '--version' }
+if ($git) { Say "git $git" 'ok' } else { Say "git not found (optional but recommended)" 'warn'; Install-Pkg (Get-WingetId 'git' 'Git.Git') 'Git' $true 'git' '--version' }
 
 # 'curl' is an alias for Invoke-WebRequest in PS 5.1 - must use curl.exe
 $curl = Get-CmdVersion 'curl.exe' '--version'
@@ -412,18 +426,18 @@ if ($sevenDir) {
     }
 } else {
     Say "7-Zip not installed" 'bad'
-    Install-Pkg '7zip.7zip' '7-Zip' $false '7z' ''
+    Install-Pkg (Get-WingetId '7z' '7zip.7zip') '7-Zip' $false '7z' ''
 }
 
 # ============ C. media ============
 Say 'C. media' 'head'
 $ffmpeg = Get-CmdVersion 'ffmpeg' '-version'
-if ($ffmpeg) { Say "ffmpeg present" 'ok' } else { Say "ffmpeg not found (media-processor needs it)" 'warn'; Install-Pkg 'Gyan.FFmpeg' 'FFmpeg' $true 'ffmpeg' '-version' }
+if ($ffmpeg) { Say "ffmpeg present" 'ok' } else { Say "ffmpeg not found (media-processor needs it)" 'warn'; Install-Pkg (Get-WingetId 'ffmpeg' 'Gyan.FFmpeg') 'FFmpeg' $true 'ffmpeg' '-version' }
 
 $ytdlp = Get-CmdVersion 'yt-dlp' '--version'
 $magick = Get-CmdVersion 'magick' '-version'
-if ($magick) { Say "ImageMagick present" 'ok' } else { Say "ImageMagick not found (optional)" 'warn'; Install-Pkg 'ImageMagick.ImageMagick' 'ImageMagick' $true 'magick' '-version' }
-if ($ytdlp) { Say "yt-dlp $ytdlp" 'ok' } else { Say "yt-dlp not found (video-transcript-downloader needs it)" 'warn'; Install-Pkg 'yt-dlp.yt-dlp' 'yt-dlp' $true 'yt-dlp' '--version' }
+if ($magick) { Say "ImageMagick present" 'ok' } else { Say "ImageMagick not found (optional)" 'warn'; Install-Pkg (Get-WingetId 'magick' 'ImageMagick.ImageMagick') 'ImageMagick' $true 'magick' '-version' }
+if ($ytdlp) { Say "yt-dlp $ytdlp" 'ok' } else { Say "yt-dlp not found (video-transcript-downloader needs it)" 'warn'; Install-Pkg (Get-WingetId 'yt-dlp' 'yt-dlp.yt-dlp') 'yt-dlp' $true 'yt-dlp' '--version' }
 
 # ============ D. browser automation ============
 Say 'D. browser automation' 'head'
@@ -434,9 +448,9 @@ $chromeCands = @(
 )
 $chrome = $null
 foreach ($c in $chromeCands) { if (Test-Path $c) { $chrome = $c; break } }
-if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg 'Google.Chrome' 'Google Chrome' $true 'chrome' '' }
+if ($chrome) { Say "chrome: $chrome" 'ok' } else { Say "Chrome not found (fetch-render.mjs needs it)" 'warn'; Install-Pkg (Get-WingetId 'chrome' 'Google.Chrome') 'Google Chrome' $true 'chrome' '' }
 
-# 工作区路径：-Workspace 参数 > DSH_WORKSPACE 环境变量 > manifest.workspace.default > 内置默认
+# Workspace: -Workspace param > DSH_WORKSPACE env > manifest.workspace.default > built-in default
 $wsPath = $Workspace
 if (-not $wsPath) { $wsPath = $env:DSH_WORKSPACE }
 if (-not $wsPath) {
@@ -735,7 +749,7 @@ else { Write-Host "run with -Apply to install / repair." }
 
 Write-Host ""
 Write-Host "next: restart the shell so PATH changes take effect, then run verify.mjs"
-# 退出码契约与 verify.mjs 一致：0 全过 / 1 有硬缺口 / 2 仅提醒
+# Exit code contract, same as verify.mjs: 0 all pass / 1 hard gap / 2 warnings only
 $exitCode = 0
 if ($script:gapsLeft -gt 0) { $exitCode = 1 }
 elseif ($script:warns -gt 0) { $exitCode = 2 }
