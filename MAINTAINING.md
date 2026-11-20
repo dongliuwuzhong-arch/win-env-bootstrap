@@ -14,7 +14,7 @@
 | 规模 | 68 个文件 / 5730 行代码 / 133 条 node 测试 + 30 条 Pester（2026-11-20 实测） |
 | 定位 | **换机第二阶段**。阶段一（装本体、拷 `~/.dsh`、拷工作区、填凭据）人工完成 |
 | 基线状态 | `verify` 硬缺口 0 / 提醒 6；`smoke.ps1` PASS；node 133/133、Pester 30/30 |
-| 仓库形态 | 目录自带 `.git`（远端 `dongliuwuzhong-arch/win-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
+| 仓库形态 | ⚠️ 已装机器上目录名可暂留 `dsh-env-bootstrap`（宿主技能监视器会攥住目录、改名报占用），frontmatter 已更名、注册不受影响，命令里的路径按实际目录名换算，下次换机对齐成 `win-env-bootstrap`。目录自带 `.git`（远端 `dongliuwuzhong-arch/win-env-bootstrap`）。外面的 `C:\DSH空间` 大仓是白名单式 .gitignore，**不追踪本目录**（2026-11-19 显式写进它的配置）。本机 push 已配 `http.proxy=127.0.0.1:7897`，裸 `git push` 即可 |
 | 说明文档 | README.md（中文）/ README.en.md（英文）逐节镜像；维护史在 `docs/维护日志.md` |
 
 ⚠️ **别把它当成「新电脑一键配齐」**。文档已经诚实改口，但它离那个目标还差三件事（见文末「没做的」）。
