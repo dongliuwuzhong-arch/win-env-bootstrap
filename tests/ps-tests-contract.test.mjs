@@ -36,6 +36,15 @@ test('g2/h 段消费 manifest 清单，不许另起炉灶（审计 P1-2 回归�
   assert.ok(!a.includes("ctx.HOME, '.dsh'"), 'a 段 pnpm 候选又写死 HOME/.dsh 了');
 });
 
+test('winget 退出码按实测语义分类（2026-11-20 纠偏回归）', () => {
+  const b = fs.readFileSync(path.join(HERE, '..', 'scripts', 'bootstrap.ps1'), 'utf8');
+  assert.ok(b.includes('-1978335189') && b.includes('no upgrade'), '-1978335189=已装无更新，不是失败');
+  assert.ok(b.includes('-1978335212') && b.includes('no package'), '-1978335212=源里没这包，不许再叫 already installed');
+  const mf = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'config', 'manifest.json'), 'utf8'));
+  const et = mf.tools.find((t) => t.name === 'exiftool');
+  assert.equal(et.winget, 'OliverBetz.ExifTool', 'exiftool 的 winget id 是 OliverBetz.ExifTool，ExifTool.ExifTool 在源里不存在');
+});
+
 test('bootstrap 有 -Profile 参数与 DSH 段闸（验收③ PS 侧锚点）', () => {
   const b = fs.readFileSync(path.join(HERE, '..', 'scripts', 'bootstrap.ps1'), 'utf8');
   assert.ok(b.includes('[string]$Profile'), '缺 -Profile 参数');

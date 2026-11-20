@@ -295,7 +295,7 @@
       "consumer": "osint/exif.py",
       "capability": "meta:exif",
       "degradedBehavior": "静默降级为无元数据",
-      "winget": "ExifTool.ExifTool",
+      "winget": "OliverBetz.ExifTool",
       "probeCmd": "exiftool",
       "probeArgs": [
         "-ver"

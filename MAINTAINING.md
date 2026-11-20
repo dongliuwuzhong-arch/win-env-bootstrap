@@ -239,7 +239,7 @@ bootstrap.ps1 的纯 ASCII 规矩是它的特例；`tests-ps/*.ps1` 含中文注
 | CI 实跑 | **跑过且修过**。2026-11-19 发现 Actions 12 次全红：GH 的 pwsh 包装器在步骤末尾 `exit $LASTEXITCODE`，把 bootstrap -Check 的合法退出码 1 漏给步骤，断言通过也判红。已修（断言后显式 `exit 0` 封尾，锚点在 `tests/ci-wrapper.test.mjs`）。实况以 Actions 页为准 |
 | `-DryRun` 计划预览 | **没做**（审查建议 #12） |
 | 00 段与 H 段工作区口径有重叠 | **不合并**（审查建议 #14）。00 查「前置到位」、H 查「内容完整」，各有用途 |
-| winget -1978335212 降级为 ok | **不做**（审查建议 #15）。该分支只在「winget 说装了但命令解析不到」时走到——那是真缺口（多半是 PATH），降级成 ok 就是漏报。只把文案改准了 |
+| winget 退出码语义 | **2026-11-20 实测纠偏**：-1978335189（0x8A15002B）=已装无更新 → warn+复测；-1978335212（0x8A150014）=**源里没这个包 id** → bad。此前把 -1978335212 翻成「已安装」是错翻，当初驳回建议 #15 的理由一并作废；exiftool 的 winget id 也借此改正（ExifTool.ExifTool → OliverBetz.ExifTool） |
 
 ## 怎么确认你没改坏
 

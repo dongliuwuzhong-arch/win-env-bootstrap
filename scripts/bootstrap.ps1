@@ -484,7 +484,11 @@ function Install-Pkg($id, $label, $optional, $probeCmd, $probeArgs) {
             else { Say "$label installed ($probe)" 'fix' }
         }
         elseif ($rc -eq 0) { Say "$label winget returned 0 but the command is not resolvable yet - restart the shell" 'warn' }
-        elseif ($rc -eq -1978335212) { Say "$label already installed per winget but not resolvable - check PATH" 'warn' }
+        # winget exit codes decoded against real output (2026-11-20 实测纠偏):
+        #   -1978335189 = 0x8A15002B no applicable upgrade (already installed)
+        #   -1978335212 = 0x8A150014 NO package found in source - NOT 'already installed'
+        elseif ($rc -eq -1978335189) { Say "$label already installed (no upgrade) but not resolvable - restart the shell / check PATH" 'warn' }
+        elseif ($rc -eq -1978335212) { Say "$label: winget source has no package '$id' - fix the winget id in manifest" 'bad' }
         else {
             $why = if (-not $isAdmin) { ' (not elevated - may need an admin shell)' } else { '' }
             Say "$label install failed: winget rc=$rc$why" 'bad'
