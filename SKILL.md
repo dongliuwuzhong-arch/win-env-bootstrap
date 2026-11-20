@@ -264,7 +264,7 @@ M 段 selfcheck   数秒（高负载 ~9s）   <- 大头，是 dsh-selfcheck 自�
 ## 测试与 CI
 
 ```bash
-cd .agents/skills/dsh-env-bootstrap
+cd .agents/skills/win-env-bootstrap
 node --test "tests/**/*.test.mjs"     # 133 个 node 契约测试
 powershell -Command "Import-Module Pester -MinimumVersion 5.0; Invoke-Pester -Path tests-ps"   # 30 个 Pester（bootstrap 函数直测 + 幂等收敛 + tweaks 探针）
 powershell -File scripts/smoke.ps1    # 一键冒烟
@@ -309,10 +309,10 @@ Pester 走 PS parser 抽函数直测，不跑脚本主体；测试文件必须�
 - id: mcp
   config:
     servers:
-      dsh-env-bootstrap:
+      win-env-bootstrap:
         transport: stdio
         command: node
-        args: ['<workspace>/.agents/skills/dsh-env-bootstrap/scripts/mcp/server.mjs']
+        args: ['<workspace>/.agents/skills/win-env-bootstrap/scripts/mcp/server.mjs']
 ```
 
 或直接命令行验证：
